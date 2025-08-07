@@ -7,9 +7,9 @@ const router = Router();
 // POST /api/assessments - Submit a new assessment
 router.post('/', async (req, res) => {
   try {
-    const { responses, sessionId } = req.body;
+    const { responses, sessionId, userInfo } = req.body;
     
-    if (!responses || !Array.isArray(responses)) {
+    if (!responses || typeof responses !== 'object') {
       return res.status(400).json({
         success: false,
         error: 'Invalid responses format'
@@ -54,7 +54,7 @@ router.post('/', async (req, res) => {
     return res.json({
       success: true,
       data: {
-        assessmentId,
+        id: assessmentId,
         totalScore: scoreResult.totalScore,
         categoryScores: scoreResult.categoryScores,
         strengths: scoreResult.strengths,
