@@ -1,4 +1,4 @@
-import { pool } from '../config/database';
+import { getDatabase } from '../config/database';
 
 const assessmentQuestions = [
   // Market & Opportunity (Category ID: 1)
@@ -313,22 +313,22 @@ const assessmentQuestions = [
 ];
 
 export async function seedQuestions(): Promise<void> {
-  const client = await pool.connect();
+  const db = await getDatabase();
   
   try {
-    await client.query('BEGIN');
+    await db.exec('BEGIN TRANSACTION');
 
     // Check if questions already exist
-    const questionsResult = await client.query('SELECT COUNT(*) FROM questions');
-    const questionsCount = parseInt(questionsResult.rows[0].count);
+    const questionsResult = await db.get('SELECT COUNT(*) as count FROM questions');
+    const questionsCount = questionsResult?.count || 0;
 
     if (questionsCount === 0) {
       console.log('🌱 Seeding assessment questions...');
 
       for (const question of assessmentQuestions) {
-        await client.query(`
+        await db.run(`
           INSERT INTO questions (category_id, text, description, type, weight, options, order_index)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [
           question.category_id,
           question.text,
@@ -345,13 +345,11 @@ export async function seedQuestions(): Promise<void> {
       console.log('📋 Questions already exist, skipping seed');
     }
 
-    await client.query('COMMIT');
+    await db.exec('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK');
+    await db.exec('ROLLBACK');
     console.error('❌ Error seeding questions:', error);
     throw error;
-  } finally {
-    client.release();
   }
 }
 

@@ -1,4 +1,4 @@
-import { pool } from '../config/database';
+import { getDatabase } from '../config/database';
 import { ScoreResult, CategoryScore, AssessmentResponse, Question, AssessmentCategory } from '../types';
 
 export class ScoringService {
@@ -7,19 +7,17 @@ export class ScoringService {
    * Calculate assessment score based on responses
    */
   async calculateScore(responses: Record<number, number>, templateId: number): Promise<ScoreResult> {
-    const client = await pool.connect();
+    const db = await getDatabase();
     
     try {
       // Get all questions with their categories
-      const questionsResult = await client.query(`
+      const questions = await db.all(`
         SELECT q.*, c.name as category_name, c.weight as category_weight
         FROM questions q
         JOIN assessment_categories c ON q.category_id = c.id
-        WHERE q.is_active = true
+        WHERE q.is_active = 1
         ORDER BY c.order_index, q.order_index
       `);
-      
-      const questions = questionsResult.rows;
       
       // Calculate category scores
       const categoryScores: Record<number, CategoryScore> = {};
@@ -94,8 +92,9 @@ export class ScoringService {
         recommendations
       };
       
-    } finally {
-      client.release();
+    } catch (error) {
+      console.error('Error calculating score:', error);
+      throw error;
     }
   }
   
@@ -103,17 +102,17 @@ export class ScoringService {
    * Calculate percentile rank based on historical data
    */
   private async calculatePercentileRank(score: number): Promise<number> {
-    const client = await pool.connect();
+    const db = await getDatabase();
     
     try {
-      const result = await client.query(`
+      const result = await db.get(`
         SELECT COUNT(*) as total_count,
-               COUNT(CASE WHEN total_score < $1 THEN 1 END) as lower_count
+               COUNT(CASE WHEN total_score < ? THEN 1 END) as lower_count
         FROM assessments 
-        WHERE total_score IS NOT NULL AND is_completed = true
+        WHERE total_score IS NOT NULL AND is_completed = 1
       `, [score]);
       
-      const { total_count, lower_count } = result.rows[0];
+      const { total_count, lower_count } = result;
       
       if (parseInt(total_count) === 0) {
         return 50; // Default percentile if no historical data
@@ -122,8 +121,9 @@ export class ScoringService {
       const percentile = Math.round((parseInt(lower_count) / parseInt(total_count)) * 100);
       return Math.max(1, Math.min(99, percentile)); // Ensure between 1-99
       
-    } finally {
-      client.release();
+    } catch (error) {
+      console.error('Error calculating percentile rank:', error);
+      return 50; // Default percentile on error
     }
   }
   
@@ -247,19 +247,23 @@ export class ScoringService {
    * Get industry benchmarks for comparison
    */
   async getIndustryBenchmarks(industry: string, stage: string): Promise<any> {
-    const client = await pool.connect();
+    const db = await getDatabase();
     
     try {
-      const result = await client.query(`
+      const result = await db.get(`
         SELECT category_averages, percentiles, sample_size
         FROM benchmarks
-        WHERE industry = $1 AND stage = $2
+        WHERE industry = ? AND stage = ?
         ORDER BY updated_at DESC
         LIMIT 1
       `, [industry, stage]);
       
-      if (result.rows.length > 0) {
-        return result.rows[0];
+      if (result) {
+        return {
+          category_averages: JSON.parse(result.category_averages),
+          percentiles: JSON.parse(result.percentiles),
+          sample_size: result.sample_size
+        };
       }
       
       // Return default benchmarks if no specific data found
@@ -280,8 +284,25 @@ export class ScoringService {
         sample_size: 0
       };
       
-    } finally {
-      client.release();
+    } catch (error) {
+      console.error('Error getting industry benchmarks:', error);
+      // Return default benchmarks on error
+      return {
+        category_averages: {
+          'Market & Opportunity': 65,
+          'Team & Leadership': 60,
+          'Product & Technology': 55,
+          'Traction & Business Model': 50,
+          'Financial Readiness': 45
+        },
+        percentiles: {
+          '25th': 40,
+          '50th': 60,
+          '75th': 80,
+          '90th': 90
+        },
+        sample_size: 0
+      };
     }
   }
   
