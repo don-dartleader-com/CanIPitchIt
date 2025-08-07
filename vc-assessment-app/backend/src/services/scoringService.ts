@@ -19,12 +19,18 @@ export class ScoringService {
         ORDER BY c.order_index, q.order_index
       `);
       
+      // Parse JSON options for each question
+      const parsedQuestions = questions.map(question => ({
+        ...question,
+        options: typeof question.options === 'string' ? JSON.parse(question.options) : question.options
+      }));
+      
       // Calculate category scores
       const categoryScores: Record<number, CategoryScore> = {};
       const categoryTotals: Record<number, { score: number; maxScore: number; name: string; weight: number }> = {};
       
       // Initialize category totals
-      for (const question of questions) {
+      for (const question of parsedQuestions) {
         if (!categoryTotals[question.category_id]) {
           categoryTotals[question.category_id] = {
             score: 0,
@@ -36,7 +42,7 @@ export class ScoringService {
       }
       
       // Calculate scores for each question
-      for (const question of questions) {
+      for (const question of parsedQuestions) {
         const responseValue = responses[question.id];
         const categoryId = question.category_id;
         

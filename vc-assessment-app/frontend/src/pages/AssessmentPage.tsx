@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAssessment, useAssessmentHelpers } from '../contexts/AssessmentContext';
 import { ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 
 const AssessmentPage: React.FC = () => {
+  const navigate = useNavigate();
   const { 
     questions, 
     categories, 
@@ -13,10 +15,11 @@ const AssessmentPage: React.FC = () => {
     loadQuestions, 
     answerQuestion, 
     nextQuestion, 
-    previousQuestion 
+    previousQuestion,
+    submitAssessment 
   } = useAssessment();
 
-  const { getCurrentQuestion, getCurrentCategory, getProgress, isQuestionAnswered } = useAssessmentHelpers();
+  const { getCurrentQuestion, getCurrentCategory, getProgress, isQuestionAnswered, canSubmit } = useAssessmentHelpers();
 
   useEffect(() => {
     if (questions.length === 0) {
@@ -77,6 +80,16 @@ const AssessmentPage: React.FC = () => {
 
   const handleAnswerSelect = (optionValue: number) => {
     answerQuestion(currentQuestion.id, optionValue);
+  };
+
+  const handleSubmitAssessment = async () => {
+    try {
+      const assessmentId = await submitAssessment();
+      navigate(`/results/${assessmentId}`);
+    } catch (error) {
+      console.error('Failed to submit assessment:', error);
+      // Error handling is already done in the context
+    }
   };
 
   return (
@@ -187,8 +200,12 @@ const AssessmentPage: React.FC = () => {
         {/* Submit Button (shown on last question) */}
         {currentQuestionIndex === questions.length - 1 && isQuestionAnswered(currentQuestion.id) && (
           <div className="mt-8 text-center">
-            <button className="btn-primary text-lg px-8 py-4">
-              Complete Assessment
+            <button 
+              onClick={handleSubmitAssessment}
+              disabled={isLoading || !canSubmit()}
+              className="btn-primary text-lg px-8 py-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Submitting...' : 'Complete Assessment'}
             </button>
           </div>
         )}

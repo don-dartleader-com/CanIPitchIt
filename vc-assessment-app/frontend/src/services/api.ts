@@ -64,8 +64,18 @@ class ApiService {
   }
 
   async getAssessmentResults(assessmentId: number): Promise<AssessmentResults> {
-    const response: AxiosResponse<ApiResponse<AssessmentResults>> = await this.api.get(`/assessments/${assessmentId}/results`);
-    return response.data.data!;
+    const response: AxiosResponse<ApiResponse<any>> = await this.api.get(`/assessments/${assessmentId}`);
+    const data = response.data.data!;
+    
+    // Transform snake_case to camelCase to match frontend types
+    return {
+      totalScore: data.total_score,
+      categoryScores: data.category_scores,
+      percentileRank: data.percentile_rank,
+      strengths: data.strengths || [],
+      weaknesses: data.weaknesses || [],
+      recommendations: data.recommendations || []
+    };
   }
 
   async saveProgress(assessmentId: number, responses: Record<number, number>): Promise<void> {
