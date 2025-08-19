@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { testConnection, initializeDatabase, seedDatabase, closeDatabase } from './config/database';
+import { testConnection, initializeDatabase, seedDatabase, closeDatabase } from './config/database-postgres';
 
 // Load environment variables
 dotenv.config();

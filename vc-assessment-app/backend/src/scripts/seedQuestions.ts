@@ -1,4 +1,4 @@
-import { getDatabase } from '../config/database';
+import { getDatabase } from '../config/database-postgres';
 
 const assessmentQuestions = [
   // Market & Opportunity (Category ID: 1)
@@ -313,22 +313,23 @@ const assessmentQuestions = [
 ];
 
 export async function seedQuestions(): Promise<void> {
-  const db = await getDatabase();
+  const pool = await getDatabase();
+  const client = await pool.connect();
   
   try {
-    await db.exec('BEGIN TRANSACTION');
+    await client.query('BEGIN');
 
     // Check if questions already exist
-    const questionsResult = await db.get('SELECT COUNT(*) as count FROM questions');
-    const questionsCount = questionsResult?.count || 0;
+    const questionsResult = await client.query('SELECT COUNT(*) as count FROM questions');
+    const questionsCount = parseInt(questionsResult.rows[0].count) || 0;
 
     if (questionsCount === 0) {
       console.log('🌱 Seeding assessment questions...');
 
       for (const question of assessmentQuestions) {
-        await db.run(`
+        await client.query(`
           INSERT INTO questions (category_id, text, description, type, weight, options, order_index)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [
           question.category_id,
           question.text,
@@ -345,11 +346,13 @@ export async function seedQuestions(): Promise<void> {
       console.log('📋 Questions already exist, skipping seed');
     }
 
-    await db.exec('COMMIT');
+    await client.query('COMMIT');
   } catch (error) {
-    await db.exec('ROLLBACK');
+    await client.query('ROLLBACK');
     console.error('❌ Error seeding questions:', error);
     throw error;
+  } finally {
+    client.release();
   }
 }
 

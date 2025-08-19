@@ -1,4 +1,4 @@
-import { testConnection, initializeDatabase, seedDatabase } from '../config/database';
+import { testConnection, initializeDatabase, seedDatabase } from '../config/database-postgres';
 import { seedQuestions } from './seedQuestions';
 
 async function testSetup() {

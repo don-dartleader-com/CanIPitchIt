@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDatabase } from '../config/database';
+import { getDatabase } from '../config/database-postgres';
 
 const router = Router();
 
@@ -7,7 +7,8 @@ const router = Router();
 router.get('/', async (req, res) => {
   try {
     const db = await getDatabase();
-    const questions = await db.all(`
+    const client = await db.connect();
+    const result = await client.query(`
       SELECT 
         q.*,
         c.name as category_name,
@@ -16,6 +17,8 @@ router.get('/', async (req, res) => {
       LEFT JOIN assessment_categories c ON q.category_id = c.id
       ORDER BY q.category_id, q.order_index
     `);
+    client.release();
+    const questions = result.rows;
 
     // Parse JSON options for each question
     const parsedQuestions = questions.map(question => ({
@@ -41,23 +44,28 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const db = await getDatabase();
+    const client = await db.connect();
     
-    const question = await db.get(`
+    const result = await client.query(`
       SELECT 
         q.*,
         c.name as category_name,
         c.description as category_description
       FROM questions q
       LEFT JOIN assessment_categories c ON q.category_id = c.id
-      WHERE q.id = ?
+      WHERE q.id = $1
     `, [id]);
+    
+    client.release();
 
-    if (!question) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         error: 'Question not found'
       });
     }
+
+    const question = result.rows[0];
 
     // Parse JSON options
     const parsedQuestion = {
@@ -83,20 +91,24 @@ router.get('/category/:categoryId', async (req, res) => {
   try {
     const { categoryId } = req.params;
     const db = await getDatabase();
+    const client = await db.connect();
     
-    const questions = await db.all(`
+    const result = await client.query(`
       SELECT 
         q.*,
         c.name as category_name,
         c.description as category_description
       FROM questions q
       LEFT JOIN assessment_categories c ON q.category_id = c.id
-      WHERE q.category_id = ?
+      WHERE q.category_id = $1
       ORDER BY q.order_index
     `, [categoryId]);
+    
+    client.release();
+    const questions = result.rows;
 
     // Parse JSON options for each question
-    const parsedQuestions = questions.map(question => ({
+    const parsedQuestions = questions.map((question: any) => ({
       ...question,
       options: typeof question.options === 'string' ? JSON.parse(question.options) : question.options
     }));

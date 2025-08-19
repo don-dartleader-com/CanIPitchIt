@@ -1,4 +1,4 @@
-import { getDatabase } from '../config/database';
+import { getDatabase } from '../config/database-postgres';
 import { ScoreResult, CategoryScore, AssessmentResponse, Question, AssessmentCategory } from '../types';
 
 export class ScoringService {
@@ -7,17 +7,20 @@ export class ScoringService {
    * Calculate assessment score based on responses
    */
   async calculateScore(responses: Record<number, number>, templateId: number): Promise<ScoreResult> {
-    const db = await getDatabase();
+    const pool = await getDatabase();
+    const client = await pool.connect();
     
     try {
       // Get all questions with their categories
-      const questions = await db.all(`
+      const result = await client.query(`
         SELECT q.*, c.name as category_name, c.weight as category_weight
         FROM questions q
         JOIN assessment_categories c ON q.category_id = c.id
-        WHERE q.is_active = 1
+        WHERE q.is_active = true
         ORDER BY c.order_index, q.order_index
       `);
+      
+      const questions = result.rows;
       
       // Parse JSON options for each question
       const parsedQuestions = questions.map(question => ({
@@ -101,6 +104,8 @@ export class ScoringService {
     } catch (error) {
       console.error('Error calculating score:', error);
       throw error;
+    } finally {
+      client.release();
     }
   }
   
@@ -108,17 +113,18 @@ export class ScoringService {
    * Calculate percentile rank based on historical data
    */
   private async calculatePercentileRank(score: number): Promise<number> {
-    const db = await getDatabase();
+    const pool = await getDatabase();
+    const client = await pool.connect();
     
     try {
-      const result = await db.get(`
+      const result = await client.query(`
         SELECT COUNT(*) as total_count,
-               COUNT(CASE WHEN total_score < ? THEN 1 END) as lower_count
+               COUNT(CASE WHEN total_score < $1 THEN 1 END) as lower_count
         FROM assessments 
-        WHERE total_score IS NOT NULL AND is_completed = 1
+        WHERE total_score IS NOT NULL AND is_completed = true
       `, [score]);
       
-      const { total_count, lower_count } = result;
+      const { total_count, lower_count } = result.rows[0];
       
       if (parseInt(total_count) === 0) {
         return 50; // Default percentile if no historical data
@@ -130,6 +136,8 @@ export class ScoringService {
     } catch (error) {
       console.error('Error calculating percentile rank:', error);
       return 50; // Default percentile on error
+    } finally {
+      client.release();
     }
   }
   
@@ -253,22 +261,24 @@ export class ScoringService {
    * Get industry benchmarks for comparison
    */
   async getIndustryBenchmarks(industry: string, stage: string): Promise<any> {
-    const db = await getDatabase();
+    const pool = await getDatabase();
+    const client = await pool.connect();
     
     try {
-      const result = await db.get(`
+      const result = await client.query(`
         SELECT category_averages, percentiles, sample_size
         FROM benchmarks
-        WHERE industry = ? AND stage = ?
+        WHERE industry = $1 AND stage = $2
         ORDER BY updated_at DESC
         LIMIT 1
       `, [industry, stage]);
       
-      if (result) {
+      if (result.rows.length > 0) {
+        const row = result.rows[0];
         return {
-          category_averages: JSON.parse(result.category_averages),
-          percentiles: JSON.parse(result.percentiles),
-          sample_size: result.sample_size
+          category_averages: typeof row.category_averages === 'string' ? JSON.parse(row.category_averages) : row.category_averages,
+          percentiles: typeof row.percentiles === 'string' ? JSON.parse(row.percentiles) : row.percentiles,
+          sample_size: row.sample_size
         };
       }
       
@@ -309,6 +319,8 @@ export class ScoringService {
         },
         sample_size: 0
       };
+    } finally {
+      client.release();
     }
   }
   

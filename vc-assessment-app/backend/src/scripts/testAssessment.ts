@@ -1,20 +1,23 @@
-import { getDatabase } from '../config/database';
+import { getDatabase } from '../config/database-postgres';
 import { scoringService } from '../services/scoringService';
 
 async function testCompleteAssessment() {
   console.log('🧪 Testing complete assessment flow...');
   
   try {
-    const db = await getDatabase();
+    const pool = await getDatabase();
+    const client = await pool.connect();
     
-    // Get all questions to create responses
-    const questions = await db.all(`
-      SELECT id, options FROM questions 
-      WHERE is_active = 1 
-      ORDER BY order_index
-    `);
-    
-    console.log(`📋 Found ${questions.length} questions`);
+    try {
+      // Get all questions to create responses
+      const result = await client.query(`
+        SELECT id, options FROM questions 
+        WHERE is_active = true 
+        ORDER BY order_index
+      `);
+      
+      const questions = result.rows;
+      console.log(`📋 Found ${questions.length} questions`);
     
     // Create sample responses (selecting middle-to-high scoring options)
     const responses: Record<number, number> = {};
@@ -40,44 +43,49 @@ async function testCompleteAssessment() {
     console.log(`   Weaknesses: ${results.weaknesses.length}`);
     console.log(`   Recommendations: ${results.recommendations.length}`);
     
-    // Save assessment to database
-    console.log('💾 Saving assessment to database...');
-    const assessmentResult = await db.run(`
-      INSERT INTO assessments (
-        template_id, session_id, responses, total_score, 
-        category_scores, is_completed, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [
-      1,
-      'test-session-' + Date.now(),
-      JSON.stringify(responses),
-      results.totalScore,
-      JSON.stringify(results.categoryScores),
-      1,
-      new Date().toISOString()
-    ]);
-    
-    const assessmentId = assessmentResult.lastID;
-    console.log(`✅ Assessment saved with ID: ${assessmentId}`);
-    
-    // Test retrieving the assessment
-    console.log('🔍 Testing assessment retrieval...');
-    const savedAssessment = await db.get(`
-      SELECT * FROM assessments WHERE id = ?
-    `, [assessmentId]);
-    
-    if (savedAssessment) {
-      console.log('✅ Assessment retrieved successfully');
-      console.log(`   ID: ${savedAssessment.id}`);
-      console.log(`   Score: ${savedAssessment.total_score}`);
-      console.log(`   Completed: ${savedAssessment.is_completed ? 'Yes' : 'No'}`);
+      // Save assessment to database
+      console.log('💾 Saving assessment to database...');
+      const assessmentResult = await client.query(`
+        INSERT INTO assessments (
+          template_id, session_id, responses, total_score, 
+          category_scores, is_completed, completed_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+      `, [
+        1,
+        'test-session-' + Date.now(),
+        JSON.stringify(responses),
+        results.totalScore,
+        JSON.stringify(results.categoryScores),
+        true,
+        new Date().toISOString()
+      ]);
+      
+      const assessmentId = assessmentResult.rows[0].id;
+      console.log(`✅ Assessment saved with ID: ${assessmentId}`);
+      
+      // Test retrieving the assessment
+      console.log('🔍 Testing assessment retrieval...');
+      const savedAssessmentResult = await client.query(`
+        SELECT * FROM assessments WHERE id = $1
+      `, [assessmentId]);
+      
+      if (savedAssessmentResult.rows.length > 0) {
+        const savedAssessment = savedAssessmentResult.rows[0];
+        console.log('✅ Assessment retrieved successfully');
+        console.log(`   ID: ${savedAssessment.id}`);
+        console.log(`   Score: ${savedAssessment.total_score}`);
+        console.log(`   Completed: ${savedAssessment.is_completed ? 'Yes' : 'No'}`);
+      }
+      
+      console.log('\n🎉 Test completed successfully!');
+      console.log(`🌐 You can view results at: http://localhost:3000/results/${assessmentId}`);
+      
+      return assessmentId;
+      
+    } finally {
+      client.release();
     }
-    
-    console.log('\n🎉 Test completed successfully!');
-    console.log(`🌐 You can view results at: http://localhost:3000/results/${assessmentId}`);
-    
-    return assessmentId;
-    
   } catch (error) {
     console.error('❌ Test failed:', error);
     throw error;
