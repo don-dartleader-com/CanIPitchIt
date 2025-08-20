@@ -2,22 +2,70 @@
 
 ## Common Deployment Issues
 
-### 1. Frontend Build Error: "Maximum call stack size exceeded" (dotenv-expand)
+### 1. Frontend Build Hanging or Failing
 
-**Error Message:**
+**Common Symptoms:**
 
-```
-RangeError: Maximum call stack size exceeded
-    at RegExp.exec (<anonymous>)
-    at /var/www/vc-assessment/frontend/node_modules/dotenv-expand/lib/main.js:11:49
-```
+- Build process hangs indefinitely
+- "Maximum call stack size exceeded" error
+- Out of memory errors during build
+- Build times out after several minutes
 
-**Cause:**
-This error occurs when `dotenv-expand` encounters circular references in environment variables or malformed variable expansion syntax.
+**Causes:**
+
+- Low memory on t3.micro instances (1GB RAM)
+- Circular references in environment variables (dotenv-expand)
+- Corrupted node_modules or npm cache
+- Insufficient disk space
 
 **Solutions:**
 
-#### Option 1: Disable dotenv expansion (Recommended)
+#### Quick Fix: Use the Frontend Build Fix Script
+
+```bash
+cd /var/www/vc-assessment/deployment
+chmod +x fix-frontend-build.sh
+./fix-frontend-build.sh
+```
+
+This script automatically:
+
+- Checks system resources
+- Cleans up previous build attempts
+- Optimizes memory settings
+- Tries multiple build strategies
+- Creates swap file if needed
+
+#### Manual Fix Options:
+
+**Option 1: Memory-optimized build**
+
+```bash
+cd /var/www/vc-assessment/frontend
+export NODE_OPTIONS="--max-old-space-size=512"
+DISABLE_DOTENV_EXPANSION=true GENERATE_SOURCEMAP=false npm run build
+```
+
+**Option 2: Clean and rebuild**
+
+```bash
+cd /var/www/vc-assessment/frontend
+rm -rf node_modules build
+npm cache clean --force
+npm install --no-audit --no-fund
+DISABLE_DOTENV_EXPANSION=true npm run build
+```
+
+**Option 3: Create swap file for low-memory systems**
+
+```bash
+sudo fallocate -l 1G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+```
+
+**Option 4: Disable dotenv expansion (for circular reference errors)**
 
 Add this to your `.env` file:
 
@@ -25,18 +73,7 @@ Add this to your `.env` file:
 DISABLE_DOTENV_EXPANSION=true
 ```
 
-#### Option 2: Clear problematic environment variables
-
-Before building, clear any potentially conflicting environment variables:
-
-```bash
-unset REACT_APP_API_URL
-unset REACT_APP_APP_NAME
-unset REACT_APP_VERSION
-DISABLE_DOTENV_EXPANSION=true npm run build
-```
-
-#### Option 3: Check for circular references
+**Option 5: Check for circular references**
 
 Look for environment variables that reference themselves:
 

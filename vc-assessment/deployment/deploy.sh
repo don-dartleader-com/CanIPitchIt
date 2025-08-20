@@ -140,7 +140,18 @@ install_frontend_deps() {
     echo -e "${BLUE}📦 Installing frontend dependencies...${NC}"
     
     cd $APP_DIR/frontend
-    npm install
+    
+    # Install dependencies with timeout and memory optimization
+    echo -e "${YELLOW}Installing npm dependencies (this may take a few minutes)...${NC}"
+    timeout 600 npm install --no-audit --no-fund --prefer-offline || {
+        print_error "npm install timed out or failed"
+        print_warning "Retrying with cache clean..."
+        npm cache clean --force
+        timeout 600 npm install --no-audit --no-fund || {
+            print_error "npm install failed after retry"
+            exit 1
+        }
+    }
     
     # Copy production environment file and disable dotenv expansion
     cp .env.production .env
@@ -158,8 +169,56 @@ install_frontend_deps() {
     unset REACT_APP_APP_NAME
     unset REACT_APP_VERSION
     
-    # Build frontend with explicit environment
-    DISABLE_DOTENV_EXPANSION=true npm run build
+    # Increase Node.js memory limit for build process
+    export NODE_OPTIONS="--max-old-space-size=1024"
+    
+    # Build frontend with timeout, progress monitoring, and memory optimization
+    echo -e "${YELLOW}Building frontend (this may take 5-10 minutes on t3.micro)...${NC}"
+    echo -e "${YELLOW}Progress will be shown below:${NC}"
+    
+    # Create a background process to monitor build progress
+    (
+        sleep 30
+        while kill -0 $$ 2>/dev/null; do
+            echo -e "${BLUE}Build still in progress... ($(date))${NC}"
+            sleep 60
+        done
+    ) &
+    MONITOR_PID=$!
+    
+    # Run the build with timeout
+    if timeout 900 bash -c "DISABLE_DOTENV_EXPANSION=true npm run build 2>&1 | tee /tmp/frontend-build.log"; then
+        kill $MONITOR_PID 2>/dev/null || true
+        print_status "Frontend build completed successfully"
+        
+        # Check if build directory was created
+        if [ ! -d "build" ]; then
+            print_error "Build directory not found after build"
+            cat /tmp/frontend-build.log
+            exit 1
+        fi
+        
+        # Check build size
+        BUILD_SIZE=$(du -sh build | cut -f1)
+        print_status "Build size: $BUILD_SIZE"
+        
+    else
+        kill $MONITOR_PID 2>/dev/null || true
+        print_error "Frontend build failed or timed out (15 minutes)"
+        echo -e "${YELLOW}Build log:${NC}"
+        cat /tmp/frontend-build.log
+        
+        # Try alternative build approach for low-memory systems
+        print_warning "Attempting memory-optimized build..."
+        export NODE_OPTIONS="--max-old-space-size=512"
+        
+        if timeout 1200 bash -c "DISABLE_DOTENV_EXPANSION=true GENERATE_SOURCEMAP=false npm run build"; then
+            print_status "Memory-optimized build completed"
+        else
+            print_error "All build attempts failed"
+            exit 1
+        fi
+    fi
     
     print_status "Frontend dependencies installed and built"
 }
