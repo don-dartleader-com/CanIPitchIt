@@ -142,14 +142,24 @@ install_frontend_deps() {
     cd $APP_DIR/frontend
     npm install
     
-    # Copy production environment file
+    # Copy production environment file and disable dotenv expansion
     cp .env.production .env
     
     # Update API URL in production env
     sed -i "s/yourdomain.com/$DOMAIN_NAME/g" .env
     
-    # Build frontend
-    npm run build
+    # Ensure DISABLE_DOTENV_EXPANSION is set to prevent circular reference issues
+    if ! grep -q "DISABLE_DOTENV_EXPANSION" .env; then
+        echo "DISABLE_DOTENV_EXPANSION=true" >> .env
+    fi
+    
+    # Clear any potentially problematic environment variables from the system
+    unset REACT_APP_API_URL
+    unset REACT_APP_APP_NAME
+    unset REACT_APP_VERSION
+    
+    # Build frontend with explicit environment
+    DISABLE_DOTENV_EXPANSION=true npm run build
     
     print_status "Frontend dependencies installed and built"
 }
