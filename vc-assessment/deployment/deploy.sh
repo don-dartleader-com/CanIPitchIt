@@ -268,6 +268,12 @@ setup_database() {
         fi
     fi
     
+    # Temporarily move TypeScript source files to prevent Node.js from resolving to them
+    echo -e "${YELLOW}Temporarily moving TypeScript source files...${NC}"
+    if [ -d "src" ]; then
+        mv src src_backup
+    fi
+    
     if timeout 30 node -e "
         const { testConnection } = require('./dist/config/database-postgres.js');
         testConnection().then(success => {
@@ -312,6 +318,12 @@ setup_database() {
         print_warning "- Security group allows connections from this EC2 instance"
         print_warning "- RDS instance is in the same VPC or properly configured"
         exit 1
+    fi
+    
+    # Restore TypeScript source files
+    if [ -d "src_backup" ]; then
+        mv src_backup src
+        echo -e "${YELLOW}TypeScript source files restored${NC}"
     fi
 }
 

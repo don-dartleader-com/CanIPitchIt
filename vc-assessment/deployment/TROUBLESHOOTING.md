@@ -113,7 +113,7 @@ Update any scripts that reference TypeScript files to use the compiled versions:
 
 ```bash
 # Instead of requiring .ts files:
-const { testConnection } = require('./src/config/database-postgres.ts');
+const { testConnection } = require('./dist/config/database-postgres.js');
 
 # Use compiled .js files:
 const { testConnection } = require('./dist/config/database-postgres.js');
