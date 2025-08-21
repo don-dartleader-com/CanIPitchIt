@@ -257,6 +257,17 @@ setup_database() {
     
     # Test database connection using compiled JavaScript
     echo -e "${YELLOW}Testing database connection...${NC}"
+    
+    # Verify the compiled file exists
+    if [ ! -f "dist/config/database-postgres.js" ]; then
+        print_error "Compiled database file not found. Rebuilding backend..."
+        npm run build
+        if [ ! -f "dist/config/database-postgres.js" ]; then
+            print_error "Failed to compile database-postgres.ts"
+            exit 1
+        fi
+    fi
+    
     if timeout 30 node -e "
         const { testConnection } = require('./dist/config/database-postgres.js');
         testConnection().then(success => {
