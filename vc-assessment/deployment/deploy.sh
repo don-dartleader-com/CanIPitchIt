@@ -255,8 +255,8 @@ setup_database() {
         npm run build
     fi
     
-    # Test database connection using compiled JavaScript
-    echo -e "${YELLOW}Testing database connection...${NC}"
+    # Use standalone database setup script to avoid TypeScript module resolution issues
+    echo -e "${YELLOW}Running database setup using standalone script...${NC}"
     
     # Verify the compiled file exists
     if [ ! -f "dist/config/database-postgres.js" ]; then
@@ -268,62 +268,18 @@ setup_database() {
         fi
     fi
     
-    # Temporarily move TypeScript source files to prevent Node.js from resolving to them
-    echo -e "${YELLOW}Temporarily moving TypeScript source files...${NC}"
-    if [ -d "src" ]; then
-        mv src src_backup
-    fi
-    
-    if timeout 30 node -e "
-        const { testConnection } = require('./dist/config/database-postgres.js');
-        testConnection().then(success => {
-            if (!success) {
-                console.error('Database connection test failed');
-                process.exit(1);
-            }
-            console.log('Database connection successful');
-        }).catch(err => {
-            console.error('Database connection error:', err.message);
-            process.exit(1);
-        });
-    "; then
-        print_status "Database connection successful"
-        
-        # Initialize database tables with timeout and error handling
-        echo -e "${YELLOW}Initializing database tables...${NC}"
-        if timeout 60 node -e "
-            const { initializeDatabase, seedDatabase } = require('./dist/config/database-postgres.js');
-            initializeDatabase().then(() => {
-                console.log('Database tables initialized');
-                return seedDatabase();
-            }).then(() => {
-                console.log('Database seeded successfully');
-                process.exit(0);
-            }).catch(err => {
-                console.error('Database setup failed:', err.message);
-                process.exit(1);
-            });
-        "; then
-            print_status "Database tables created and seeded"
-        else
-            print_error "Database initialization failed or timed out"
-            print_warning "Check the database logs and connection settings"
-            exit 1
-        fi
+    # Run the standalone database setup script with timeout
+    if timeout 120 node $APP_DIR/deployment/setup-database.js; then
+        print_status "Database setup completed successfully"
     else
-        print_error "Database connection failed. Please check your RDS configuration."
+        print_error "Database setup failed or timed out"
         print_warning "Verify the following:"
         print_warning "- RDS endpoint is correct: $DB_HOST"
         print_warning "- Database credentials are valid"
         print_warning "- Security group allows connections from this EC2 instance"
         print_warning "- RDS instance is in the same VPC or properly configured"
+        print_warning "- Backend environment file is properly configured"
         exit 1
-    fi
-    
-    # Restore TypeScript source files
-    if [ -d "src_backup" ]; then
-        mv src_backup src
-        echo -e "${YELLOW}TypeScript source files restored${NC}"
     fi
 }
 
