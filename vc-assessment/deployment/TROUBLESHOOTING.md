@@ -148,7 +148,7 @@ Database connection failed
 4. Test connection manually:
 
 ```bash
-psql -h your-rds-endpoint.region.rds.amazonaws.com -U postgres -d vc_assessment
+psql --host=your-rds-endpoint.region.rds.amazonaws.com --port=5432 --dbname=vc_assessment --username=postgres
 ```
 
 ### 3. SSL Certificate Issues
@@ -331,11 +331,11 @@ sudo systemctl status certbot.timer
 
 ```bash
 # Connect to PostgreSQL
-psql -h your-rds-endpoint -U postgres -d vc_assessment
+psql --host=your-rds-endpoint --port=5432 --dbname=vc_assessment --username=postgres
 
 # Test database connection from Node.js
 cd /var/www/vc-assessment/backend
-node -e "const { testConnection } = require('./src/config/database-postgres'); testConnection().then(console.log);"
+node -e "const { testConnection } = require('./dist/config/database-postgres.js'); testConnection().then(console.log);"
 ```
 
 ## Getting Help

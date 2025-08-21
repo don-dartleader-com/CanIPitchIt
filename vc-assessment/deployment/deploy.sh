@@ -256,29 +256,50 @@ setup_database() {
     fi
     
     # Test database connection using compiled JavaScript
-    if node -e "
+    echo -e "${YELLOW}Testing database connection...${NC}"
+    if timeout 30 node -e "
         const { testConnection } = require('./dist/config/database-postgres.js');
         testConnection().then(success => {
-            if (!success) process.exit(1);
-        }).catch(() => process.exit(1));
+            if (!success) {
+                console.error('Database connection test failed');
+                process.exit(1);
+            }
+            console.log('Database connection successful');
+        }).catch(err => {
+            console.error('Database connection error:', err.message);
+            process.exit(1);
+        });
     "; then
         print_status "Database connection successful"
         
-        # Initialize database tables
-        node -e "
+        # Initialize database tables with timeout and error handling
+        echo -e "${YELLOW}Initializing database tables...${NC}"
+        if timeout 60 node -e "
             const { initializeDatabase, seedDatabase } = require('./dist/config/database-postgres.js');
-            initializeDatabase().then(() => seedDatabase()).then(() => {
-                console.log('Database initialized and seeded');
+            initializeDatabase().then(() => {
+                console.log('Database tables initialized');
+                return seedDatabase();
+            }).then(() => {
+                console.log('Database seeded successfully');
                 process.exit(0);
             }).catch(err => {
-                console.error('Database setup failed:', err);
+                console.error('Database setup failed:', err.message);
                 process.exit(1);
             });
-        "
-        
-        print_status "Database tables created and seeded"
+        "; then
+            print_status "Database tables created and seeded"
+        else
+            print_error "Database initialization failed or timed out"
+            print_warning "Check the database logs and connection settings"
+            exit 1
+        fi
     else
         print_error "Database connection failed. Please check your RDS configuration."
+        print_warning "Verify the following:"
+        print_warning "- RDS endpoint is correct: $DB_HOST"
+        print_warning "- Database credentials are valid"
+        print_warning "- Security group allows connections from this EC2 instance"
+        print_warning "- RDS instance is in the same VPC or properly configured"
         exit 1
     fi
 }
@@ -422,29 +443,64 @@ restart_services() {
 health_check() {
     echo -e "${BLUE}🏥 Running health checks...${NC}"
     
-    # Check if backend is running
-    sleep 5
-    if curl -f http://localhost:5000/health > /dev/null 2>&1; then
+    # Wait for services to start
+    echo -e "${YELLOW}Waiting for services to start...${NC}"
+    sleep 10
+    
+    # Check if backend is running with retries
+    echo -e "${YELLOW}Checking backend health...${NC}"
+    BACKEND_HEALTHY=false
+    for i in {1..5}; do
+        if curl -f -s http://localhost:5000/health > /dev/null 2>&1; then
+            BACKEND_HEALTHY=true
+            break
+        fi
+        echo -e "${YELLOW}Backend not ready, attempt $i/5...${NC}"
+        sleep 5
+    done
+    
+    if [ "$BACKEND_HEALTHY" = true ]; then
         print_status "Backend health check passed"
     else
-        print_error "Backend health check failed"
+        print_error "Backend health check failed after 5 attempts"
+        print_warning "Checking PM2 status and logs..."
+        pm2 status
         pm2 logs vc-assessment-backend --lines 20
+        print_warning "Check if the backend is properly configured and database is accessible"
     fi
     
     # Check if Nginx is serving the frontend
-    if curl -f http://localhost > /dev/null 2>&1; then
+    echo -e "${YELLOW}Checking frontend availability...${NC}"
+    if curl -f -s http://localhost > /dev/null 2>&1; then
         print_status "Frontend health check passed"
     else
         print_error "Frontend health check failed"
+        print_warning "Checking Nginx configuration..."
         sudo nginx -t
+        sudo systemctl status nginx
+        print_warning "Check if frontend build files exist and Nginx configuration is correct"
     fi
     
-    # Check SSL certificate
-    if curl -f https://$DOMAIN_NAME > /dev/null 2>&1; then
-        print_status "SSL certificate check passed"
+    # Check SSL certificate (only if domain is not the default)
+    if [ "$DOMAIN_NAME" != "yourdomain.com" ]; then
+        echo -e "${YELLOW}Checking SSL certificate...${NC}"
+        if curl -f -s https://$DOMAIN_NAME > /dev/null 2>&1; then
+            print_status "SSL certificate check passed"
+        else
+            print_warning "SSL certificate check failed - this is normal if DNS is not yet configured"
+            print_warning "Make sure your domain DNS points to this server's IP address"
+        fi
     else
-        print_warning "SSL certificate check failed - this is normal if DNS is not yet configured"
+        print_warning "Using default domain name - SSL check skipped"
+        print_warning "Update DOMAIN_NAME environment variable with your actual domain"
     fi
+    
+    # Display service status summary
+    echo -e "${BLUE}Service Status Summary:${NC}"
+    echo "  PM2 Processes:"
+    pm2 jlist | jq -r '.[] | "    \(.name): \(.pm2_env.status)"' 2>/dev/null || pm2 status
+    echo "  Nginx Status: $(sudo systemctl is-active nginx)"
+    echo "  UFW Status: $(sudo ufw status | head -1)"
 }
 
 # Function to display final information
