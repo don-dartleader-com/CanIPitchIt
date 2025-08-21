@@ -249,15 +249,9 @@ setup_database() {
     
     cd $APP_DIR/backend
     
-    # Ensure the backend is built first
-    if [ ! -d "dist" ]; then
-        print_warning "Backend not built yet, building now..."
-        npm run build
-    fi
-    
-    # Test database connection using compiled JavaScript
+    # Test database connection
     if node -e "
-        const { testConnection } = require('./dist/config/database-postgres.js');
+        const { testConnection } = require('./src/config/database-postgres.ts');
         testConnection().then(success => {
             if (!success) process.exit(1);
         }).catch(() => process.exit(1));
@@ -266,7 +260,7 @@ setup_database() {
         
         # Initialize database tables
         node -e "
-            const { initializeDatabase, seedDatabase } = require('./dist/config/database-postgres.js');
+            const { initializeDatabase, seedDatabase } = require('./src/config/database-postgres.ts');
             initializeDatabase().then(() => seedDatabase()).then(() => {
                 console.log('Database initialized and seeded');
                 process.exit(0);

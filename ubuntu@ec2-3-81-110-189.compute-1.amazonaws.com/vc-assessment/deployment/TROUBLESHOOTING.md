@@ -85,54 +85,7 @@ REACT_APP_API_URL=${REACT_APP_API_URL}/api
 REACT_APP_API_URL=https://yourdomain.com/api
 ```
 
-### 2. TypeScript Import Error During Database Setup
-
-**Error Message:**
-
-```
-SyntaxError: Unexpected token ':'
-    at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
-    at ModuleLoader.importSyncForRequire (node:internal/modules/esm/loader:316:18)
-```
-
-**Cause:**
-The deployment script is trying to require TypeScript files directly, but Node.js can't understand TypeScript syntax.
-
-**Solutions:**
-
-#### Option 1: Ensure backend is built first
-
-```bash
-cd /var/www/vc-assessment/backend
-npm run build
-```
-
-#### Option 2: Use compiled JavaScript files
-
-Update any scripts that reference TypeScript files to use the compiled versions:
-
-```bash
-# Instead of requiring .ts files:
-const { testConnection } = require('./src/config/database-postgres.ts');
-
-# Use compiled .js files:
-const { testConnection } = require('./dist/config/database-postgres.js');
-```
-
-#### Option 3: Manual database setup
-
-If the automated setup fails, set up the database manually:
-
-```bash
-cd /var/www/vc-assessment/backend
-npm run build
-node -e "
-const { testConnection, initializeDatabase, seedDatabase } = require('./dist/config/database-postgres.js');
-testConnection().then(() => initializeDatabase()).then(() => seedDatabase()).then(() => console.log('Database setup complete')).catch(console.error);
-"
-```
-
-### 3. Database Connection Issues
+### 2. Database Connection Issues
 
 **Error Message:**
 
