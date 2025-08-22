@@ -137,16 +137,31 @@ class DatabaseMigrator {
       const column = columns[index];
       
       // Convert JSON strings to proper JSON for PostgreSQL
-      if (jsonFields.includes(column) && typeof value === 'string') {
+      if (jsonFields.includes(column) && typeof value === 'string' && value.trim() !== '') {
         try {
+          // First, try to parse as-is
           return JSON.parse(value);
         } catch (e) {
-          return value;
+          try {
+            // If that fails, try to fix common escaping issues
+            let fixedValue = value;
+            
+            // Handle double-escaped quotes
+            fixedValue = fixedValue.replace(/\\"/g, '"');
+            
+            // Handle escaped backslashes
+            fixedValue = fixedValue.replace(/\\\\/g, '\\');
+            
+            return JSON.parse(fixedValue);
+          } catch (e2) {
+            console.warn(`⚠️  Could not parse JSON for ${column} in ${tableName}, keeping as string:`, value);
+            return value;
+          }
         }
       }
       
       // Convert SQLite boolean integers to PostgreSQL booleans
-      if (typeof value === 'number' && (column.includes('is_') || column.includes('_verified'))) {
+      if (typeof value === 'number' && (column.includes('is_') || column.includes('_verified') || column === 'is_active')) {
         return value === 1;
       }
       
@@ -167,6 +182,7 @@ class DatabaseMigrator {
     } catch (error) {
       console.error(`Error inserting row into ${tableName}:`, error.message);
       console.error('Row data:', row);
+      console.error('Processed values:', processedValues);
       throw error;
     }
   }
