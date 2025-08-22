@@ -117,7 +117,7 @@ clone_repository() {
         git pull origin main
     else
         # Replace with your actual repository URL
-        git clone https://github.com/your-username/vc-assessment.git $APP_DIR
+        git https://github.com/don-dartleader-com/CanIPitchIt.git $APP_DIR
         cd $APP_DIR
     fi
     
