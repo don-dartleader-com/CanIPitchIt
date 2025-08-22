@@ -116,8 +116,27 @@ clone_repository() {
         cd $APP_DIR
         git pull origin main
     else
-        # Replace with your actual repository URL
-        git  clone https://github.com/don-dartleader-com/CanIPitchIt.git $APP_DIR_ROOT
+        # Clone to temporary directory to avoid nested folder structure
+        TEMP_DIR="/tmp/vc-assessment-clone"
+        rm -rf $TEMP_DIR
+        
+        # Clone repository to temporary location
+        git clone https://github.com/don-dartleader-com/CanIPitchIt.git $TEMP_DIR
+        
+        # Move the vc-assessment contents to the target directory
+        if [ -d "$TEMP_DIR/vc-assessment" ]; then
+            # Move contents from the vc-assessment subdirectory
+            mv $TEMP_DIR/vc-assessment/* $APP_DIR/
+            mv $TEMP_DIR/vc-assessment/.* $APP_DIR/ 2>/dev/null || true  # Move hidden files, ignore errors
+        else
+            # If no vc-assessment subdirectory, move everything
+            mv $TEMP_DIR/* $APP_DIR/
+            mv $TEMP_DIR/.* $APP_DIR/ 2>/dev/null || true  # Move hidden files, ignore errors
+        fi
+        
+        # Clean up temporary directory
+        rm -rf $TEMP_DIR
+        
         cd $APP_DIR
     fi
     
