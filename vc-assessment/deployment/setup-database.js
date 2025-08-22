@@ -52,6 +52,60 @@ const initializeConnection = async () => {
     return pool;
 };
 
+// Create database if it doesn't exist, then test connection
+const ensureDatabaseExists = async () => {
+    console.log('🔧 Checking if target database exists...');
+    
+    try {
+        // Try to connect to the target database directly
+        const testPool = new Pool(dbConfig);
+        const testClient = await testPool.connect();
+        await testClient.query('SELECT 1');
+        testClient.release();
+        await testPool.end();
+        console.log('✅ Target database exists and is accessible');
+        return true;
+    } catch (error) {
+        // If the database doesn't exist, create it
+        if (error.code === '3D000') {
+            console.log('🔧 Target database does not exist, creating it...');
+            try {
+                // Connect to the default postgres database to create the target database
+                const defaultConfig = {
+                    ...dbConfig,
+                    database: 'postgres' // Connect to default database
+                };
+                
+                const defaultPool = new Pool(defaultConfig);
+                const defaultClient = await defaultPool.connect();
+                
+                // Create the target database
+                await defaultClient.query(`CREATE DATABASE "${process.env.DB_NAME}"`);
+                console.log(`✅ Database "${process.env.DB_NAME}" created successfully`);
+                
+                defaultClient.release();
+                await defaultPool.end();
+                
+                // Verify the database was created
+                const verifyPool = new Pool(dbConfig);
+                const verifyClient = await verifyPool.connect();
+                await verifyClient.query('SELECT 1');
+                verifyClient.release();
+                await verifyPool.end();
+                console.log('✅ Database creation verified');
+                return true;
+                
+            } catch (createError) {
+                console.error('❌ Failed to create database:', createError);
+                return false;
+            }
+        } else {
+            console.error('❌ Database connection failed:', error);
+            return false;
+        }
+    }
+};
+
 // Test database connection
 const testConnection = async () => {
     try {
@@ -302,6 +356,14 @@ const closeDatabase = async () => {
 // Main setup function
 async function setupDatabase() {
     try {
+        // First, ensure the database exists (create if necessary)
+        const databaseReady = await ensureDatabaseExists();
+        
+        if (!databaseReady) {
+            console.error('❌ Failed to ensure database exists');
+            process.exit(1);
+        }
+        
         console.log('🔍 Testing database connection...');
         const connected = await testConnection();
         
