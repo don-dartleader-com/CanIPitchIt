@@ -136,11 +136,14 @@ class DatabaseMigrator {
     const processedValues = values.map((value, index) => {
       const column = columns[index];
       
-      // Convert JSON strings to proper JSON for PostgreSQL
+      // Convert JSON strings to proper JSON for PostgreSQL JSONB fields
       if (jsonFields.includes(column) && typeof value === 'string' && value.trim() !== '') {
         try {
           // First, try to parse as-is
-          return JSON.parse(value);
+          const parsedValue = JSON.parse(value);
+          // For PostgreSQL JSONB, we need to pass the parsed object directly
+          // The pg driver will handle the JSON serialization
+          return parsedValue;
         } catch (e) {
           try {
             // If that fails, try to fix common escaping issues
@@ -152,12 +155,19 @@ class DatabaseMigrator {
             // Handle escaped backslashes
             fixedValue = fixedValue.replace(/\\\\/g, '\\');
             
-            return JSON.parse(fixedValue);
+            const parsedValue = JSON.parse(fixedValue);
+            return parsedValue;
           } catch (e2) {
             console.warn(`⚠️  Could not parse JSON for ${column} in ${tableName}, keeping as string:`, value);
-            return value;
+            // If we can't parse it, return null for JSONB fields to avoid errors
+            return null;
           }
         }
+      }
+      
+      // Handle empty JSON fields
+      if (jsonFields.includes(column) && (value === '' || value === null || value === undefined)) {
+        return null;
       }
       
       // Convert SQLite boolean integers to PostgreSQL booleans
