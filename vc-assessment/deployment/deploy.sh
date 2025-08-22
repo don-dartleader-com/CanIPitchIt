@@ -266,26 +266,9 @@ setup_environment() {
 setup_database() {
     echo -e "${BLUE}🗄️  Setting up PostgreSQL database...${NC}"
     
-    cd $APP_DIR/backend
-    
-    # Ensure the backend is built first
-    if [ ! -d "dist" ]; then
-        print_warning "Backend not built yet, building now..."
-        npm run build
-    fi
-    
-    # Use standalone database setup script to avoid TypeScript module resolution issues
-    echo -e "${YELLOW}Running database setup using standalone script...${NC}"
-    
-    # Verify the compiled file exists
-    if [ ! -f "dist/config/database-postgres.js" ]; then
-        print_error "Compiled database file not found. Rebuilding backend..."
-        npm run build
-        if [ ! -f "dist/config/database-postgres.js" ]; then
-            print_error "Failed to compile database-postgres.ts"
-            exit 1
-        fi
-    fi
+    # Install pg module globally to ensure it's available for the standalone script
+    echo -e "${YELLOW}Installing PostgreSQL client module...${NC}"
+    sudo npm install -g pg
     
     # Export environment variables for the database setup script
     export DB_HOST="$DB_HOST"
@@ -293,6 +276,9 @@ setup_database() {
     export DB_USER="$DB_USER"
     export DB_PASSWORD="$DB_PASSWORD"
     export NODE_ENV="production"
+    
+    # Use standalone database setup script to avoid any module resolution issues
+    echo -e "${YELLOW}Running database setup using standalone script...${NC}"
     
     # Run the standalone database setup script with timeout
     if timeout 120 node $APP_DIR/deployment/setup-database.js; then
@@ -305,6 +291,12 @@ setup_database() {
         print_warning "- Security group allows connections from this EC2 instance"
         print_warning "- RDS instance is in the same VPC or properly configured"
         print_warning "- Environment variables are properly set"
+        print_warning "- PostgreSQL client module is installed"
+        
+        # Show more detailed error information
+        echo -e "${YELLOW}Attempting to run database setup with more verbose output...${NC}"
+        node $APP_DIR/deployment/setup-database.js || true
+        
         exit 1
     fi
 }
