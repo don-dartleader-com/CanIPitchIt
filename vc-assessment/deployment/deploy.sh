@@ -266,9 +266,11 @@ setup_environment() {
 setup_database() {
     echo -e "${BLUE}🗄️  Setting up PostgreSQL database...${NC}"
     
-    # Install pg module globally to ensure it's available for the standalone script
-    echo -e "${YELLOW}Installing PostgreSQL client module...${NC}"
-    sudo npm install -g pg
+    # Install pg module in the deployment directory
+    echo -e "${YELLOW}Installing PostgreSQL client module locally...${NC}"
+    cd $APP_DIR/deployment
+    npm init -y > /dev/null 2>&1
+    npm install pg
     
     # Export environment variables for the database setup script
     export DB_HOST="$DB_HOST"
@@ -280,8 +282,8 @@ setup_database() {
     # Use standalone database setup script to avoid any module resolution issues
     echo -e "${YELLOW}Running database setup using standalone script...${NC}"
     
-    # Run the standalone database setup script with timeout
-    if timeout 120 node $APP_DIR/deployment/setup-database.js; then
+    # Run the standalone database setup script with timeout from the deployment directory
+    if timeout 120 node setup-database.js; then
         print_status "Database setup completed successfully"
     else
         print_error "Database setup failed or timed out"
@@ -295,7 +297,7 @@ setup_database() {
         
         # Show more detailed error information
         echo -e "${YELLOW}Attempting to run database setup with more verbose output...${NC}"
-        node $APP_DIR/deployment/setup-database.js || true
+        node setup-database.js || true
         
         exit 1
     fi
