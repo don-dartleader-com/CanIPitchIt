@@ -26,7 +26,7 @@ APP_DIR="/var/www/vc-assessment"
 LOG_DIR="/var/log/vc-assessment"
 NGINX_SITES="/etc/nginx/sites-available"
 NGINX_ENABLED="/etc/nginx/sites-enabled"
-
+APP_DIR_ROOT="/var/www/"
 echo -e "${BLUE}🚀 Starting VC Assessment Tool Deployment${NC}"
 echo "=================================================="
 
@@ -117,7 +117,7 @@ clone_repository() {
         git pull origin main
     else
         # Replace with your actual repository URL
-        git  clone https://github.com/don-dartleader-com/CanIPitchIt.git $APP_DIR
+        git  clone https://github.com/don-dartleader-com/CanIPitchIt.git $APP_DIR_ROOT
         cd $APP_DIR
     fi
     
