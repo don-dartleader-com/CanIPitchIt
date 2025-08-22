@@ -308,9 +308,14 @@ migrate_data() {
     echo -e "${BLUE}🔄 Checking for existing SQLite data...${NC}"
     
     if [ -f "$APP_DIR/backend/database.sqlite" ]; then
-        print_warning "SQLite database found. Starting migration to PostgreSQL..."
+        print_warning "SQLite database found. Installing sqlite3 module for migration..."
         
         cd $APP_DIR/deployment
+        
+        # Install sqlite3 module for migration
+        npm install sqlite3
+        
+        print_warning "Starting migration to PostgreSQL..."
         node migrate-to-postgres.js
         
         print_status "Data migration completed"
