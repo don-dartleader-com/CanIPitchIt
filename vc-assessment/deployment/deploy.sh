@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 DOMAIN_NAME="${DOMAIN_NAME:-dev.canipitchit.com}"
 DB_HOST="${DB_HOST:-vc-assessment.cijw2rvqzxao.us-east-1.rds.amazonaws.com}"
-DB_NAME="${DB_NAME:-vc_assessment}"
+DB_NAME="${DB_NAME:-vc-assessment}"
 DB_USER="${DB_USER:-postgres}"
 DB_PASSWORD="${DB_PASSWORD:-3_v-ZdGh8TeEj*AT-4gz}"
 JWT_SECRET="${JWT_SECRET:-$(openssl rand -base64 32)}"
@@ -253,7 +253,7 @@ setup_environment() {
     # Update environment variables using | as delimiter to avoid issues with special characters
     sed -i "s|your-rds-endpoint.region.rds.amazonaws.com|$DB_HOST|g" .env
     sed -i "s|your_secure_rds_password|$DB_PASSWORD|g" .env
-    sed -i "s|vc_assessment|$DB_NAME|g" .env
+    sed -i "s|vc-assessment|$DB_NAME|g" .env
     sed -i "s|postgres|$DB_USER|g" .env
     sed -i "s|your_super_secure_jwt_secret_key_for_production_min_32_chars|$JWT_SECRET|g" .env
     sed -i "s|yourdomain.com|$DOMAIN_NAME|g" .env
