@@ -231,14 +231,14 @@ setup_environment() {
     cd $APP_DIR/backend
     cp .env.production .env
     
-    # Update environment variables
-    sed -i "s/your-rds-endpoint.region.rds.amazonaws.com/$DB_HOST/g" .env
-    sed -i "s/your_secure_rds_password/$DB_PASSWORD/g" .env
-    sed -i "s/vc_assessment/$DB_NAME/g" .env
-    sed -i "s/postgres/$DB_USER/g" .env
-    sed -i "s/your_super_secure_jwt_secret_key_for_production_min_32_chars/$JWT_SECRET/g" .env
-    sed -i "s/yourdomain.com/$DOMAIN_NAME/g" .env
-    sed -i "s/admin@yourdomain.com/$ADMIN_EMAIL/g" .env
+    # Update environment variables using | as delimiter to avoid issues with special characters
+    sed -i "s|your-rds-endpoint.region.rds.amazonaws.com|$DB_HOST|g" .env
+    sed -i "s|your_secure_rds_password|$DB_PASSWORD|g" .env
+    sed -i "s|vc_assessment|$DB_NAME|g" .env
+    sed -i "s|postgres|$DB_USER|g" .env
+    sed -i "s|your_super_secure_jwt_secret_key_for_production_min_32_chars|$JWT_SECRET|g" .env
+    sed -i "s|yourdomain.com|$DOMAIN_NAME|g" .env
+    sed -i "s|admin@yourdomain.com|$ADMIN_EMAIL|g" .env
     
     print_status "Environment files configured"
 }
