@@ -1,12 +1,7 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.query = exports.closeDatabase = exports.seedDatabase = exports.initializeDatabase = exports.testConnection = exports.getDatabase = exports.initializeConnection = void 0;
 const pg_1 = require("pg");
-const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
 let pool = null;
 const dbConfig = {
     host: process.env.DB_HOST || 'localhost',

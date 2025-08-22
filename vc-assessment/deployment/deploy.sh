@@ -13,20 +13,20 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-DOMAIN_NAME="${DOMAIN_NAME:-yourdomain.com}"
-DB_HOST="${DB_HOST:-your-rds-endpoint.region.rds.amazonaws.com}"
+DOMAIN_NAME="${DOMAIN_NAME:-dev.canipitchit.com}"
+DB_HOST="${DB_HOST:-vc-assessment.cijw2rvqzxao.us-east-1.rds.amazonaws.com}"
 DB_NAME="${DB_NAME:-vc_assessment}"
 DB_USER="${DB_USER:-postgres}"
-DB_PASSWORD="${DB_PASSWORD:-your_secure_rds_password}"
+DB_PASSWORD="${DB_PASSWORD:-3_v-ZdGh8TeEj*AT-4gz}"
 JWT_SECRET="${JWT_SECRET:-$(openssl rand -base64 32)}"
-ADMIN_EMAIL="${ADMIN_EMAIL:-admin@yourdomain.com}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-donielw@gmail.com}"
 
 # Directories
 APP_DIR="/var/www/vc-assessment"
 LOG_DIR="/var/log/vc-assessment"
 NGINX_SITES="/etc/nginx/sites-available"
 NGINX_ENABLED="/etc/nginx/sites-enabled"
-APP_DIR_ROOT="/var/www/"
+APP_DIR_ROOT="/var/www/vc-assessment"
 echo -e "${BLUE}🚀 Starting VC Assessment Tool Deployment${NC}"
 echo "=================================================="
 
@@ -268,6 +268,13 @@ setup_database() {
         fi
     fi
     
+    # Export environment variables for the database setup script
+    export DB_HOST="$DB_HOST"
+    export DB_NAME="$DB_NAME"
+    export DB_USER="$DB_USER"
+    export DB_PASSWORD="$DB_PASSWORD"
+    export NODE_ENV="production"
+    
     # Run the standalone database setup script with timeout
     if timeout 120 node $APP_DIR/deployment/setup-database.js; then
         print_status "Database setup completed successfully"
@@ -278,7 +285,7 @@ setup_database() {
         print_warning "- Database credentials are valid"
         print_warning "- Security group allows connections from this EC2 instance"
         print_warning "- RDS instance is in the same VPC or properly configured"
-        print_warning "- Backend environment file is properly configured"
+        print_warning "- Environment variables are properly set"
         exit 1
     fi
 }

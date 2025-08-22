@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Standalone database setup script that runs from compiled JavaScript files
-// This avoids TypeScript module resolution issues during deployment
+// Standalone database setup script that avoids dotenv issues
+// Reads environment variables directly from process.env (set by deploy.sh)
 
 const path = require('path');
 const fs = require('fs');
@@ -18,10 +18,23 @@ if (!fs.existsSync(dbFile)) {
     process.exit(1);
 }
 
-// Load environment variables
-require('dotenv').config();
+// Verify required environment variables are set
+const requiredEnvVars = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
-// Import from compiled JavaScript files
+if (missingVars.length > 0) {
+    console.error('❌ Missing required environment variables:', missingVars.join(', '));
+    console.error('These should be set by the deployment script');
+    process.exit(1);
+}
+
+console.log('🔧 Environment variables loaded:');
+console.log('  DB_HOST:', process.env.DB_HOST);
+console.log('  DB_NAME:', process.env.DB_NAME);
+console.log('  DB_USER:', process.env.DB_USER);
+console.log('  DB_PASSWORD:', process.env.DB_PASSWORD ? '[SET]' : '[NOT SET]');
+
+// Import from compiled JavaScript files (without dotenv)
 const { testConnection, initializeDatabase, seedDatabase } = require('./dist/config/database-postgres.js');
 
 async function setupDatabase() {
