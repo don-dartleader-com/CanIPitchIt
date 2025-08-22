@@ -139,11 +139,12 @@ class DatabaseMigrator {
       // Convert JSON strings to proper JSON for PostgreSQL JSONB fields
       if (jsonFields.includes(column) && typeof value === 'string' && value.trim() !== '') {
         try {
-          // First, try to parse as-is
+          // First, try to parse the JSON string
           const parsedValue = JSON.parse(value);
-          // For PostgreSQL JSONB, we need to pass the parsed object directly
-          // The pg driver will handle the JSON serialization
-          return parsedValue;
+          
+          // For PostgreSQL JSONB fields, we need to stringify the parsed object
+          // This ensures the pg driver receives a proper JSON string
+          return JSON.stringify(parsedValue);
         } catch (e) {
           try {
             // If that fails, try to fix common escaping issues
@@ -152,14 +153,53 @@ class DatabaseMigrator {
             // Handle double-escaped quotes
             fixedValue = fixedValue.replace(/\\"/g, '"');
             
-            // Handle escaped backslashes
+            // Handle escaped backslashes  
             fixedValue = fixedValue.replace(/\\\\/g, '\\');
             
+            // Try to remove any extra escaping that might be causing issues
+            fixedValue = fixedValue.replace(/\\'/g, "'");
+            
             const parsedValue = JSON.parse(fixedValue);
-            return parsedValue;
+            return JSON.stringify(parsedValue);
           } catch (e2) {
-            console.warn(`⚠️  Could not parse JSON for ${column} in ${tableName}, keeping as string:`, value);
-            // If we can't parse it, return null for JSONB fields to avoid errors
+            console.warn(`⚠️  Could not parse JSON for ${column} in ${tableName}:`, value);
+            console.warn(`⚠️  Original error:`, e.message);
+            console.warn(`⚠️  Secondary error:`, e2.message);
+            
+            // As a last resort, try to create a valid JSON structure
+            // Check if it looks like an array but has formatting issues
+            if (value.includes('[') && value.includes(']')) {
+              try {
+                // Try to extract and rebuild the array structure
+                const arrayMatch = value.match(/\[(.*)\]/s);
+                if (arrayMatch) {
+                  const arrayContent = arrayMatch[1];
+                  // Split by common delimiters and clean up
+                  const items = arrayContent.split(/,(?=\s*["{])/);
+                  const cleanItems = items.map(item => {
+                    const trimmed = item.trim();
+                    // If it looks like a JSON object, try to parse it
+                    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                      try {
+                        return JSON.parse(trimmed);
+                      } catch {
+                        return trimmed;
+                      }
+                    }
+                    // If it's a quoted string, clean it up
+                    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+                      return trimmed.slice(1, -1);
+                    }
+                    return trimmed;
+                  });
+                  return JSON.stringify(cleanItems);
+                }
+              } catch (e3) {
+                console.warn(`⚠️  Final parsing attempt failed:`, e3.message);
+              }
+            }
+            
+            // If all else fails, return null for JSONB fields to avoid errors
             return null;
           }
         }
@@ -193,6 +233,18 @@ class DatabaseMigrator {
       console.error(`Error inserting row into ${tableName}:`, error.message);
       console.error('Row data:', row);
       console.error('Processed values:', processedValues);
+      
+      // If it's a JSON error, let's examine the problematic data more closely
+      if (error.message.includes('invalid input syntax for type json')) {
+        console.error('🔍 JSON Error Analysis:');
+        processedValues.forEach((val, idx) => {
+          const col = columns[idx];
+          if (jsonFields.includes(col)) {
+            console.error(`   ${col}:`, typeof val, val);
+          }
+        });
+      }
+      
       throw error;
     }
   }
