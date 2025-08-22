@@ -350,14 +350,46 @@ configure_nginx() {
 setup_ssl() {
     echo -e "${BLUE}🔒 Setting up SSL certificate...${NC}"
     
-    # Obtain SSL certificate
-    sudo certbot --nginx -d $DOMAIN_NAME -d www.$DOMAIN_NAME --non-interactive --agree-tos --email $ADMIN_EMAIL
+    # Check if domain is properly configured (not the default placeholder)
+    if [ "$DOMAIN_NAME" = "yourdomain.com" ] || [ "$DOMAIN_NAME" = "dev.canipitchit.com" ]; then
+        print_warning "Using placeholder domain name ($DOMAIN_NAME)"
+        print_warning "Skipping SSL certificate setup"
+        print_warning "To enable SSL later:"
+        print_warning "1. Update DOMAIN_NAME environment variable with your actual domain"
+        print_warning "2. Ensure DNS points to this server"
+        print_warning "3. Run: sudo certbot --nginx -d yourdomain.com"
+        return 0
+    fi
     
-    # Setup auto-renewal
-    sudo systemctl enable certbot.timer
-    sudo systemctl start certbot.timer
+    # Check if domain resolves to this server
+    echo -e "${YELLOW}Checking if domain resolves to this server...${NC}"
+    SERVER_IP=$(curl -s http://checkip.amazonaws.com/ || curl -s http://ipinfo.io/ip || echo "unknown")
+    DOMAIN_IP=$(dig +short $DOMAIN_NAME | tail -n1)
     
-    print_status "SSL certificate configured and auto-renewal enabled"
+    if [ "$SERVER_IP" != "$DOMAIN_IP" ]; then
+        print_warning "Domain $DOMAIN_NAME does not resolve to this server ($SERVER_IP vs $DOMAIN_IP)"
+        print_warning "Skipping SSL certificate setup"
+        print_warning "Please configure DNS first, then run:"
+        print_warning "sudo certbot --nginx -d $DOMAIN_NAME"
+        return 0
+    fi
+    
+    # Attempt to obtain SSL certificate
+    echo -e "${YELLOW}Attempting to obtain SSL certificate...${NC}"
+    if sudo certbot --nginx -d $DOMAIN_NAME -d www.$DOMAIN_NAME --non-interactive --agree-tos --email $ADMIN_EMAIL; then
+        # Setup auto-renewal
+        sudo systemctl enable certbot.timer
+        sudo systemctl start certbot.timer
+        print_status "SSL certificate configured and auto-renewal enabled"
+    else
+        print_warning "SSL certificate setup failed"
+        print_warning "This is normal if:"
+        print_warning "- Domain DNS is not yet propagated"
+        print_warning "- Domain doesn't point to this server"
+        print_warning "- Rate limits have been exceeded"
+        print_warning "The application will work over HTTP"
+        print_warning "You can set up SSL later with: sudo certbot --nginx -d $DOMAIN_NAME"
+    fi
 }
 
 # Function to setup PM2
