@@ -34,8 +34,8 @@ console.log('  DB_NAME:', process.env.DB_NAME);
 console.log('  DB_USER:', process.env.DB_USER);
 console.log('  DB_PASSWORD:', process.env.DB_PASSWORD ? '[SET]' : '[NOT SET]');
 
-// Import from compiled JavaScript files (without dotenv)
-const { testConnection, initializeDatabase, seedDatabase } = require('./dist/config/database-postgres.js');
+// Import from compiled JavaScript files (without dotenv) using absolute path
+const { testConnection, initializeDatabase, seedDatabase } = require(path.join(backendDir, 'dist', 'config', 'database-postgres.js'));
 
 async function setupDatabase() {
     try {
