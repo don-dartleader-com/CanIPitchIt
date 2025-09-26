@@ -18,7 +18,7 @@ function App() {
   return (
     <AuthProvider>
       <AssessmentProvider>
-        <Router basename="/">
+        <Router>
           <div className="min-h-screen bg-gray-50 flex flex-col">
             <Header />
             <main className="flex-1">
