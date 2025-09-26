@@ -16,7 +16,6 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
-    "@types/sqlite3": "^3.1.11",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
@@ -27,8 +26,6 @@
     "morgan": "^1.10.1",
     "nodemailer": "^7.0.5",
     "pg": "^8.16.3",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

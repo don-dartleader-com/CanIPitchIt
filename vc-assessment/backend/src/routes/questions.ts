@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDatabase } from '../config/database-postgres';
+import { getDatabase } from '../config/database';
 
 const router = Router();
 

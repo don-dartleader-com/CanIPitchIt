@@ -1,50 +1,69 @@
-import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
-import path from 'path';
+import { Pool, PoolClient } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-let db: Database<sqlite3.Database, sqlite3.Statement> | null = null;
+let pool: Pool | null = null;
 
-// Get database path
-const getDatabasePath = (): string => {
-  const dbPath = process.env.DATABASE_URL || './database.sqlite';
-  return path.resolve(dbPath);
+// Database configuration
+const getDatabaseConfig = () => {
+  return {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'vc_assessment',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'password',
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    max: 20, // Maximum number of clients in the pool
+    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+    connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  };
 };
 
-// Initialize database connection
-export const initializeConnection = async (): Promise<Database<sqlite3.Database, sqlite3.Statement>> => {
-  if (db) {
-    return db;
+// Initialize database connection pool
+export const initializeConnection = async (): Promise<Pool> => {
+  if (pool) {
+    return pool;
   }
 
-  const dbPath = getDatabasePath();
-  
-  db = await open({
-    filename: dbPath,
-    driver: sqlite3.Database
+  const config = getDatabaseConfig();
+  pool = new Pool(config);
+
+  // Handle pool errors
+  pool.on('error', (err) => {
+    console.error('Unexpected error on idle client', err);
+    process.exit(-1);
   });
 
-  // Enable foreign keys
-  await db.exec('PRAGMA foreign_keys = ON');
-  
-  return db;
+  // Test the connection
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT NOW()');
+    client.release();
+    console.log('✅ PostgreSQL database connected successfully');
+  } catch (error) {
+    console.error('❌ PostgreSQL connection failed:', error);
+    throw error;
+  }
+
+  return pool;
 };
 
-// Get database instance
-export const getDatabase = async (): Promise<Database<sqlite3.Database, sqlite3.Statement>> => {
-  if (!db) {
-    db = await initializeConnection();
+// Get database pool instance
+export const getDatabase = async (): Promise<Pool> => {
+  if (!pool) {
+    pool = await initializeConnection();
   }
-  return db;
+  return pool;
 };
 
 // Test database connection
 export const testConnection = async (): Promise<boolean> => {
   try {
     const database = await getDatabase();
-    await database.get('SELECT 1');
+    const client = await database.connect();
+    await client.query('SELECT 1');
+    client.release();
     console.log('✅ Database connected successfully');
     return true;
   } catch (error) {
@@ -56,158 +75,159 @@ export const testConnection = async (): Promise<boolean> => {
 // Initialize database tables
 export const initializeDatabase = async (): Promise<void> => {
   const database = await getDatabase();
+  const client = await database.connect();
   
   try {
-    await database.exec('BEGIN TRANSACTION');
+    await client.query('BEGIN');
 
     // Create users table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT,
-        role TEXT DEFAULT 'user',
-        is_verified BOOLEAN DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255),
+        role VARCHAR(50) DEFAULT 'user',
+        is_verified BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create user_profiles table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS user_profiles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        company_name TEXT,
-        founder_name TEXT,
-        industry TEXT,
-        stage TEXT,
-        website TEXT,
-        linkedin_url TEXT,
+        company_name VARCHAR(255),
+        founder_name VARCHAR(255),
+        industry VARCHAR(100),
+        stage VARCHAR(100),
+        website VARCHAR(255),
+        linkedin_url VARCHAR(255),
         description TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create assessment_categories table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS assessment_categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
         description TEXT,
         weight INTEGER NOT NULL,
         order_index INTEGER NOT NULL,
-        is_active BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create questions table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         category_id INTEGER REFERENCES assessment_categories(id),
         text TEXT NOT NULL,
         description TEXT,
-        type TEXT DEFAULT 'multiple_choice',
+        type VARCHAR(50) DEFAULT 'multiple_choice',
         weight INTEGER NOT NULL,
-        options TEXT,
+        options JSONB,
         order_index INTEGER NOT NULL,
-        is_active BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create assessment_templates table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS assessment_templates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        version TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        version VARCHAR(50) NOT NULL,
         description TEXT,
-        is_active BOOLEAN DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create assessments table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS assessments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
         template_id INTEGER REFERENCES assessment_templates(id),
-        session_id TEXT,
-        responses TEXT NOT NULL,
+        session_id VARCHAR(255),
+        responses JSONB NOT NULL,
         total_score INTEGER,
-        category_scores TEXT,
-        is_completed BOOLEAN DEFAULT 0,
-        completed_at DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        category_scores JSONB,
+        is_completed BOOLEAN DEFAULT FALSE,
+        completed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create assessment_results table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS assessment_results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         assessment_id INTEGER REFERENCES assessments(id) ON DELETE CASCADE,
-        strengths TEXT,
-        weaknesses TEXT,
-        recommendations TEXT,
+        strengths JSONB,
+        weaknesses JSONB,
+        recommendations JSONB,
         percentile_rank INTEGER,
-        industry_comparison TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        industry_comparison JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create benchmarks table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS benchmarks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        industry TEXT,
-        stage TEXT,
-        category_averages TEXT,
-        percentiles TEXT,
+        id SERIAL PRIMARY KEY,
+        industry VARCHAR(100),
+        stage VARCHAR(100),
+        category_averages JSONB,
+        percentiles JSONB,
         sample_size INTEGER,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create action_plans table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS action_plans (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
         assessment_id INTEGER REFERENCES assessments(id),
         admin_id INTEGER REFERENCES users(id),
-        title TEXT,
-        plan_data TEXT,
-        status TEXT DEFAULT 'draft',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        title VARCHAR(255),
+        plan_data JSONB,
+        status VARCHAR(50) DEFAULT 'draft',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Create investor_intros table
-    await database.exec(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS investor_intros (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
         assessment_id INTEGER REFERENCES assessments(id),
         intro_text TEXT,
-        investor_name TEXT,
-        status TEXT DEFAULT 'draft',
-        generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        sent_at DATETIME
+        investor_name VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'draft',
+        generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sent_at TIMESTAMP
       )
     `);
 
     // Create indexes for better performance
-    await database.exec(`
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_assessments_user_id ON assessments(user_id);
       CREATE INDEX IF NOT EXISTS idx_assessments_session_id ON assessments(session_id);
@@ -216,25 +236,28 @@ export const initializeDatabase = async (): Promise<void> => {
       CREATE INDEX IF NOT EXISTS idx_assessment_results_assessment_id ON assessment_results(assessment_id);
     `);
 
-    await database.exec('COMMIT');
+    await client.query('COMMIT');
     console.log('✅ Database tables initialized successfully');
   } catch (error) {
-    await database.exec('ROLLBACK');
+    await client.query('ROLLBACK');
     console.error('❌ Database initialization failed:', error);
     throw error;
+  } finally {
+    client.release();
   }
 };
 
 // Seed initial data
 export const seedDatabase = async (): Promise<void> => {
   const database = await getDatabase();
+  const client = await database.connect();
   
   try {
-    await database.exec('BEGIN TRANSACTION');
+    await client.query('BEGIN');
 
     // Check if categories already exist
-    const categoriesResult = await database.get('SELECT COUNT(*) as count FROM assessment_categories');
-    const categoriesCount = categoriesResult?.count || 0;
+    const categoriesResult = await client.query('SELECT COUNT(*) as count FROM assessment_categories');
+    const categoriesCount = parseInt(categoriesResult.rows[0].count);
 
     if (categoriesCount === 0) {
       // Insert assessment categories
@@ -247,34 +270,47 @@ export const seedDatabase = async (): Promise<void> => {
       ];
 
       for (const category of categories) {
-        await database.run(
-          'INSERT INTO assessment_categories (name, description, weight, order_index) VALUES (?, ?, ?, ?)',
+        await client.query(
+          'INSERT INTO assessment_categories (name, description, weight, order_index) VALUES ($1, $2, $3, $4)',
           [category.name, category.description, category.weight, category.order_index]
         );
       }
 
       // Insert default assessment template
-      await database.run(
-        'INSERT INTO assessment_templates (name, version, description) VALUES (?, ?, ?)',
+      await client.query(
+        'INSERT INTO assessment_templates (name, version, description) VALUES ($1, $2, $3)',
         ['Default VC Readiness Assessment', '1.0', 'Comprehensive assessment for VC funding readiness']
       );
 
-      console.log('✅ Database seeded with initial data');
+      console.log('✅ Database seeded with categories and templates');
     }
 
-    await database.exec('COMMIT');
+    // Check if questions exist and seed them
+    const questionsResult = await client.query('SELECT COUNT(*) as count FROM questions');
+    const questionsCount = parseInt(questionsResult.rows[0].count);
+
+    if (questionsCount === 0) {
+      console.log('📝 Seeding questions...');
+      // Import and run question seeding
+      const { seedQuestions } = await import('../scripts/seedQuestions');
+      await seedQuestions();
+    }
+
+    await client.query('COMMIT');
   } catch (error) {
-    await database.exec('ROLLBACK');
+    await client.query('ROLLBACK');
     console.error('❌ Database seeding failed:', error);
     throw error;
+  } finally {
+    client.release();
   }
 };
 
 // Graceful shutdown
 export const closeDatabase = async (): Promise<void> => {
-  if (db) {
-    await db.close();
-    db = null;
-    console.log('📦 Database connection closed');
+  if (pool) {
+    await pool.end();
+    pool = null;
+    console.log('📦 Database connection pool closed');
   }
 };

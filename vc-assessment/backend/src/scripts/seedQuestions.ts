@@ -1,370 +1,398 @@
-import { getDatabase } from '../config/database-postgres';
+import { getDatabase, initializeDatabase } from '../config/database';
+import dotenv from 'dotenv';
 
-const assessmentQuestions = [
-  // Market & Opportunity (Category ID: 1)
+dotenv.config();
+
+const questions = [
+  // Market & Opportunity (Category 1)
   {
-    category_id: 1,
-    text: "What is the total addressable market (TAM) for your solution?",
-    description: "Consider the total market demand for your product or service",
+    categoryId: 1,
+    text: "What is the size of your total addressable market (TAM)?",
+    description: "Estimate the total market opportunity for your product or service",
     type: "multiple_choice",
     weight: 5,
+    orderIndex: 1,
     options: [
-      { value: 0, text: "Under $100M", points: 0 },
-      { value: 1, text: "$100M - $500M", points: 1 },
-      { value: 2, text: "$500M - $1B", points: 2 },
-      { value: 3, text: "$1B - $10B", points: 4 },
-      { value: 4, text: "Over $10B", points: 5 }
-    ],
-    order_index: 1
+      { value: 1, label: "Less than $100M", score: 1 },
+      { value: 2, label: "$100M - $1B", score: 3 },
+      { value: 3, label: "$1B - $10B", score: 4 },
+      { value: 4, label: "More than $10B", score: 5 }
+    ]
   },
   {
-    category_id: 1,
-    text: "What is the annual growth rate of your target market?",
-    description: "Market growth indicates opportunity and timing",
+    categoryId: 1,
+    text: "How would you describe your market's growth rate?",
+    description: "Annual growth rate of your target market",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 2,
     options: [
-      { value: 0, text: "Declining market", points: 0 },
-      { value: 1, text: "Flat (0-2% growth)", points: 1 },
-      { value: 2, text: "Growing (3-10% annually)", points: 2 },
-      { value: 3, text: "Fast growth (11-25% annually)", points: 4 },
-      { value: 4, text: "Explosive growth (>25% annually)", points: 5 }
-    ],
-    order_index: 2
+      { value: 1, label: "Declining or flat (0% or less)", score: 1 },
+      { value: 2, label: "Slow growth (1-5%)", score: 2 },
+      { value: 3, label: "Moderate growth (6-15%)", score: 3 },
+      { value: 4, label: "High growth (16-30%)", score: 4 },
+      { value: 5, label: "Explosive growth (30%+)", score: 5 }
+    ]
   },
   {
-    category_id: 1,
-    text: "How well have you validated the problem you're solving?",
-    description: "Problem validation is crucial for product-market fit",
+    categoryId: 1,
+    text: "How many direct competitors do you have?",
+    description: "Companies offering similar solutions to the same target market",
     type: "multiple_choice",
-    weight: 5,
+    weight: 3,
+    orderIndex: 3,
     options: [
-      { value: 0, text: "No validation yet", points: 0 },
-      { value: 1, text: "Based on assumptions only", points: 1 },
-      { value: 2, text: "Some market research conducted", points: 2 },
-      { value: 3, text: "Extensive customer interviews", points: 4 },
-      { value: 4, text: "Customers paying for solution", points: 5 }
-    ],
-    order_index: 3
+      { value: 1, label: "Many (10+)", score: 2 },
+      { value: 2, label: "Several (5-9)", score: 3 },
+      { value: 3, label: "Few (2-4)", score: 4 },
+      { value: 4, label: "One main competitor", score: 4 },
+      { value: 5, label: "No direct competitors", score: 5 }
+    ]
   },
   {
-    category_id: 1,
+    categoryId: 1,
     text: "What is your competitive advantage?",
-    description: "Sustainable competitive advantages create defensible businesses",
+    description: "What makes your solution unique and defensible",
     type: "multiple_choice",
     weight: 5,
+    orderIndex: 4,
     options: [
-      { value: 0, text: "No clear advantage", points: 0 },
-      { value: 1, text: "Minor feature differences", points: 1 },
-      { value: 2, text: "Some differentiation", points: 2 },
-      { value: 3, text: "Strong competitive moat", points: 4 },
-      { value: 4, text: "Unique IP or breakthrough technology", points: 5 }
-    ],
-    order_index: 4
-  },
-  {
-    category_id: 1,
-    text: "How developed is your go-to-market strategy?",
-    description: "Clear path to customers is essential for scaling",
-    type: "multiple_choice",
-    weight: 5,
-    options: [
-      { value: 0, text: "No strategy defined", points: 0 },
-      { value: 1, text: "Basic plan outlined", points: 1 },
-      { value: 2, text: "Defined channels and tactics", points: 2 },
-      { value: 3, text: "Proven channels with metrics", points: 4 },
-      { value: 4, text: "Scalable, repeatable system", points: 5 }
-    ],
-    order_index: 5
+      { value: 1, label: "No clear advantage", score: 1 },
+      { value: 2, label: "Better pricing", score: 2 },
+      { value: 3, label: "Better features/quality", score: 3 },
+      { value: 4, label: "Proprietary technology/IP", score: 4 },
+      { value: 5, label: "Network effects or strong moats", score: 5 }
+    ]
   },
 
-  // Team & Leadership (Category ID: 2)
+  // Team & Leadership (Category 2)
   {
-    category_id: 2,
-    text: "What is your experience as a founder?",
-    description: "Founder experience significantly impacts success probability",
+    categoryId: 2,
+    text: "How many years of relevant industry experience does the founding team have?",
+    description: "Combined experience in your industry or related fields",
     type: "multiple_choice",
     weight: 5,
+    orderIndex: 1,
     options: [
-      { value: 0, text: "First-time founder, no relevant experience", points: 1 },
-      { value: 1, text: "Some entrepreneurial experience", points: 2 },
-      { value: 2, text: "Relevant industry experience", points: 3 },
-      { value: 3, text: "Previous successful exit", points: 4 },
-      { value: 4, text: "Serial entrepreneur with multiple exits", points: 5 }
-    ],
-    order_index: 1
+      { value: 1, label: "Less than 2 years", score: 1 },
+      { value: 2, label: "2-5 years", score: 2 },
+      { value: 3, label: "6-10 years", score: 3 },
+      { value: 4, label: "11-20 years", score: 4 },
+      { value: 5, label: "More than 20 years", score: 5 }
+    ]
   },
   {
-    category_id: 2,
-    text: "How complete is your founding team?",
-    description: "Strong teams with complementary skills perform better",
+    categoryId: 2,
+    text: "Have any founders previously built and exited a company?",
+    description: "Track record of successful entrepreneurship",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 2,
     options: [
-      { value: 0, text: "Solo founder", points: 1 },
-      { value: 1, text: "2 co-founders", points: 2 },
-      { value: 2, text: "Core team (3-4 people)", points: 3 },
-      { value: 3, text: "Full team across key functions", points: 4 },
-      { value: 4, text: "Complete team plus advisors", points: 5 }
-    ],
-    order_index: 2
+      { value: 1, label: "No, first-time founders", score: 2 },
+      { value: 2, label: "Built companies but no exits", score: 3 },
+      { value: 3, label: "One successful exit", score: 4 },
+      { value: 4, label: "Multiple successful exits", score: 5 }
+    ]
   },
   {
-    category_id: 2,
-    text: "What is your team's domain expertise?",
-    description: "Deep industry knowledge provides significant advantages",
+    categoryId: 2,
+    text: "How complete is your core team?",
+    description: "Key roles filled for your business model",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 3,
     options: [
-      { value: 0, text: "Learning the industry", points: 1 },
-      { value: 1, text: "Basic industry knowledge", points: 2 },
-      { value: 2, text: "Good understanding of market", points: 3 },
-      { value: 3, text: "Deep industry expertise", points: 4 },
-      { value: 4, text: "Recognized industry leaders", points: 5 }
-    ],
-    order_index: 3
+      { value: 1, label: "Just founders", score: 1 },
+      { value: 2, label: "Missing critical roles", score: 2 },
+      { value: 3, label: "Most key roles filled", score: 3 },
+      { value: 4, label: "All key roles filled", score: 4 },
+      { value: 5, label: "Strong team with advisors", score: 5 }
+    ]
   },
   {
-    category_id: 2,
-    text: "How strong is your advisory board?",
-    description: "Quality advisors provide guidance, credibility, and connections",
+    categoryId: 2,
+    text: "What is the team's technical capability?",
+    description: "Ability to build and scale your product",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 4,
     options: [
-      { value: 0, text: "No advisors", points: 0 },
-      { value: 1, text: "Friends and family advisors", points: 1 },
-      { value: 2, text: "Some relevant advisors", points: 2 },
-      { value: 3, text: "Strong industry advisors", points: 4 },
-      { value: 4, text: "Top-tier advisors and mentors", points: 5 }
-    ],
-    order_index: 4
+      { value: 1, label: "No technical co-founder", score: 1 },
+      { value: 2, label: "Outsourced development", score: 2 },
+      { value: 3, label: "Technical co-founder", score: 4 },
+      { value: 4, label: "Strong technical team", score: 5 }
+    ]
   },
 
-  // Product & Technology (Category ID: 3)
+  // Product & Technology (Category 3)
   {
-    category_id: 3,
+    categoryId: 3,
     text: "What stage is your product development?",
-    description: "Product maturity affects risk and time to market",
+    description: "Current state of your product or service",
     type: "multiple_choice",
     weight: 5,
+    orderIndex: 1,
     options: [
-      { value: 0, text: "Idea stage only", points: 0 },
-      { value: 1, text: "Working prototype", points: 1 },
-      { value: 2, text: "Minimum viable product (MVP)", points: 2 },
-      { value: 3, text: "Beta product with users", points: 4 },
-      { value: 4, text: "Market-ready product", points: 5 }
-    ],
-    order_index: 1
+      { value: 1, label: "Idea/concept stage", score: 1 },
+      { value: 2, label: "Prototype/MVP", score: 2 },
+      { value: 3, label: "Beta version with users", score: 3 },
+      { value: 4, label: "Launched product", score: 4 },
+      { value: 5, label: "Mature product with iterations", score: 5 }
+    ]
   },
   {
-    category_id: 3,
-    text: "How technically differentiated is your solution?",
-    description: "Technical innovation can create sustainable advantages",
+    categoryId: 3,
+    text: "How differentiated is your product?",
+    description: "Uniqueness compared to existing solutions",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 2,
     options: [
-      { value: 0, text: "No technical differentiation", points: 0 },
-      { value: 1, text: "Minor technical improvements", points: 1 },
-      { value: 2, text: "Notable technical features", points: 2 },
-      { value: 3, text: "Significant technical innovation", points: 4 },
-      { value: 4, text: "Breakthrough technology", points: 5 }
-    ],
-    order_index: 2
+      { value: 1, label: "Similar to existing products", score: 1 },
+      { value: 2, label: "Minor improvements", score: 2 },
+      { value: 3, label: "Significant improvements", score: 3 },
+      { value: 4, label: "Novel approach", score: 4 },
+      { value: 5, label: "Breakthrough innovation", score: 5 }
+    ]
   },
   {
-    category_id: 3,
-    text: "What intellectual property do you have?",
-    description: "IP protection can provide competitive moats",
+    categoryId: 3,
+    text: "Do you have intellectual property protection?",
+    description: "Patents, trademarks, or other IP protection",
     type: "multiple_choice",
-    weight: 5,
+    weight: 3,
+    orderIndex: 3,
     options: [
-      { value: 0, text: "No intellectual property", points: 0 },
-      { value: 1, text: "Trade secrets and know-how", points: 1 },
-      { value: 2, text: "Pending patent applications", points: 2 },
-      { value: 3, text: "Granted patents", points: 4 },
-      { value: 4, text: "Strong IP portfolio", points: 5 }
-    ],
-    order_index: 3
+      { value: 1, label: "No IP protection", score: 1 },
+      { value: 2, label: "Trade secrets/know-how", score: 2 },
+      { value: 3, label: "Trademarks", score: 3 },
+      { value: 4, label: "Patents pending", score: 4 },
+      { value: 5, label: "Granted patents", score: 5 }
+    ]
   },
   {
-    category_id: 3,
-    text: "How scalable is your technology platform?",
-    description: "Scalability is crucial for venture-scale returns",
+    categoryId: 3,
+    text: "How scalable is your technology/solution?",
+    description: "Ability to handle growth without proportional cost increases",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 4,
     options: [
-      { value: 0, text: "Mostly manual processes", points: 0 },
-      { value: 1, text: "Some automation in place", points: 1 },
-      { value: 2, text: "Mostly automated and scalable", points: 2 },
-      { value: 3, text: "Highly scalable architecture", points: 4 },
-      { value: 4, text: "Infinitely scalable platform", points: 5 }
-    ],
-    order_index: 4
-  },
-
-  // Traction & Business Model (Category ID: 4)
-  {
-    category_id: 4,
-    text: "How clear is your revenue model?",
-    description: "Clear path to monetization is essential",
-    type: "multiple_choice",
-    weight: 5,
-    options: [
-      { value: 0, text: "No revenue model defined", points: 0 },
-      { value: 1, text: "Unclear or unproven model", points: 1 },
-      { value: 2, text: "Defined revenue model", points: 2 },
-      { value: 3, text: "Proven revenue model", points: 4 },
-      { value: 4, text: "Multiple revenue streams", points: 5 }
-    ],
-    order_index: 1
-  },
-  {
-    category_id: 4,
-    text: "What customer traction do you have?",
-    description: "Customer validation reduces market risk",
-    type: "multiple_choice",
-    weight: 5,
-    options: [
-      { value: 0, text: "No customers yet", points: 0 },
-      { value: 1, text: "Letters of intent or interest", points: 1 },
-      { value: 2, text: "Pilot customers", points: 2 },
-      { value: 3, text: "Paying customers", points: 4 },
-      { value: 4, text: "Growing customer base", points: 5 }
-    ],
-    order_index: 2
-  },
-  {
-    category_id: 4,
-    text: "What is your current monthly recurring revenue (MRR)?",
-    description: "Revenue growth demonstrates market validation",
-    type: "multiple_choice",
-    weight: 5,
-    options: [
-      { value: 0, text: "No revenue yet", points: 0 },
-      { value: 1, text: "Under $10K MRR", points: 1 },
-      { value: 2, text: "$10K - $50K MRR", points: 2 },
-      { value: 3, text: "$50K - $200K MRR", points: 4 },
-      { value: 4, text: "Over $200K MRR", points: 5 }
-    ],
-    order_index: 3
-  },
-  {
-    category_id: 4,
-    text: "How well do you understand your unit economics?",
-    description: "Understanding unit economics is crucial for scaling",
-    type: "multiple_choice",
-    weight: 5,
-    options: [
-      { value: 0, text: "Don't know unit economics", points: 0 },
-      { value: 1, text: "Unit economics are negative", points: 1 },
-      { value: 2, text: "Break-even unit economics", points: 2 },
-      { value: 3, text: "Positive unit economics", points: 4 },
-      { value: 4, text: "Strong margins and LTV/CAC", points: 5 }
-    ],
-    order_index: 4
+      { value: 1, label: "Not scalable (linear costs)", score: 1 },
+      { value: 2, label: "Somewhat scalable", score: 2 },
+      { value: 3, label: "Moderately scalable", score: 3 },
+      { value: 4, label: "Highly scalable", score: 4 },
+      { value: 5, label: "Infinitely scalable (software)", score: 5 }
+    ]
   },
 
-  // Financial Readiness (Category ID: 5)
+  // Traction & Business Model (Category 4)
   {
-    category_id: 5,
-    text: "How detailed is your financial planning?",
-    description: "Financial planning shows business maturity",
+    categoryId: 4,
+    text: "What is your current monthly recurring revenue (MRR) or monthly revenue?",
+    description: "Current revenue run rate",
     type: "multiple_choice",
     weight: 5,
+    orderIndex: 1,
     options: [
-      { value: 0, text: "No financial planning", points: 0 },
-      { value: 1, text: "Basic revenue projections", points: 1 },
-      { value: 2, text: "Detailed financial forecasts", points: 2 },
-      { value: 3, text: "Scenario planning and modeling", points: 4 },
-      { value: 4, text: "Sophisticated financial models", points: 5 }
-    ],
-    order_index: 1
+      { value: 1, label: "No revenue", score: 1 },
+      { value: 2, label: "$1-$10K", score: 2 },
+      { value: 3, label: "$10K-$100K", score: 3 },
+      { value: 4, label: "$100K-$1M", score: 4 },
+      { value: 5, label: "More than $1M", score: 5 }
+    ]
   },
   {
-    category_id: 5,
-    text: "How clear are your funding requirements?",
-    description: "Clear funding needs demonstrate strategic thinking",
+    categoryId: 4,
+    text: "What is your revenue growth rate?",
+    description: "Month-over-month or year-over-year growth",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 2,
     options: [
-      { value: 0, text: "Unclear funding needs", points: 0 },
-      { value: 1, text: "Rough funding estimate", points: 1 },
-      { value: 2, text: "Defined funding amount", points: 2 },
-      { value: 3, text: "Detailed funding breakdown", points: 4 },
-      { value: 4, text: "Multiple funding scenarios", points: 5 }
-    ],
-    order_index: 2
+      { value: 1, label: "Declining", score: 1 },
+      { value: 2, label: "Flat (0%)", score: 2 },
+      { value: 3, label: "Growing (1-20%)", score: 3 },
+      { value: 4, label: "Fast growth (21-50%)", score: 4 },
+      { value: 5, label: "Explosive growth (50%+)", score: 5 }
+    ]
   },
   {
-    category_id: 5,
-    text: "How specific is your use of funds strategy?",
-    description: "Clear use of funds shows execution capability",
+    categoryId: 4,
+    text: "How many paying customers do you have?",
+    description: "Current customer base size",
     type: "multiple_choice",
-    weight: 5,
+    weight: 4,
+    orderIndex: 3,
     options: [
-      { value: 0, text: "Vague use of funds", points: 0 },
-      { value: 1, text: "General spending categories", points: 1 },
-      { value: 2, text: "Specific fund allocation", points: 2 },
-      { value: 3, text: "Detailed milestones and ROI", points: 4 },
-      { value: 4, text: "ROI projections by category", points: 5 }
-    ],
-    order_index: 3
+      { value: 1, label: "No paying customers", score: 1 },
+      { value: 2, label: "1-10 customers", score: 2 },
+      { value: 3, label: "11-100 customers", score: 3 },
+      { value: 4, label: "101-1000 customers", score: 4 },
+      { value: 5, label: "1000+ customers", score: 5 }
+    ]
+  },
+  {
+    categoryId: 4,
+    text: "What is your customer acquisition cost (CAC) to lifetime value (LTV) ratio?",
+    description: "Unit economics of your business model",
+    type: "multiple_choice",
+    weight: 4,
+    orderIndex: 4,
+    options: [
+      { value: 1, label: "Don't know/haven't calculated", score: 1 },
+      { value: 2, label: "LTV < CAC (negative)", score: 1 },
+      { value: 3, label: "LTV = 1-3x CAC", score: 2 },
+      { value: 4, label: "LTV = 3-5x CAC", score: 4 },
+      { value: 5, label: "LTV > 5x CAC", score: 5 }
+    ]
+  },
+
+  // Financial Readiness (Category 5)
+  {
+    categoryId: 5,
+    text: "How much funding are you seeking?",
+    description: "Amount of capital needed for next milestone",
+    type: "multiple_choice",
+    weight: 3,
+    orderIndex: 1,
+    options: [
+      { value: 1, label: "Less than $100K", score: 2 },
+      { value: 2, label: "$100K - $500K", score: 3 },
+      { value: 3, label: "$500K - $2M", score: 4 },
+      { value: 4, label: "$2M - $10M", score: 5 },
+      { value: 5, label: "More than $10M", score: 4 }
+    ]
+  },
+  {
+    categoryId: 5,
+    text: "How long will the funding last?",
+    description: "Runway provided by the funding round",
+    type: "multiple_choice",
+    weight: 4,
+    orderIndex: 2,
+    options: [
+      { value: 1, label: "Less than 12 months", score: 1 },
+      { value: 2, label: "12-18 months", score: 3 },
+      { value: 3, label: "18-24 months", score: 4 },
+      { value: 4, label: "24-36 months", score: 5 },
+      { value: 5, label: "More than 36 months", score: 4 }
+    ]
+  },
+  {
+    categoryId: 5,
+    text: "Do you have detailed financial projections?",
+    description: "Quality of financial planning and forecasting",
+    type: "multiple_choice",
+    weight: 4,
+    orderIndex: 3,
+    options: [
+      { value: 1, label: "No financial projections", score: 1 },
+      { value: 2, label: "Basic revenue projections", score: 2 },
+      { value: 3, label: "Detailed P&L projections", score: 3 },
+      { value: 4, label: "Full financial model", score: 4 },
+      { value: 5, label: "Scenario-based models", score: 5 }
+    ]
+  },
+  {
+    categoryId: 5,
+    text: "What will you use the funding for?",
+    description: "Primary use of investment capital",
+    type: "multiple_choice",
+    weight: 4,
+    orderIndex: 4,
+    options: [
+      { value: 1, label: "General operations", score: 2 },
+      { value: 2, label: "Product development", score: 3 },
+      { value: 3, label: "Team expansion", score: 4 },
+      { value: 4, label: "Marketing/customer acquisition", score: 4 },
+      { value: 5, label: "Strategic mix of above", score: 5 }
+    ]
   }
 ];
 
-export async function seedQuestions(): Promise<void> {
-  const pool = await getDatabase();
-  const client = await pool.connect();
-  
+const seedQuestions = async (): Promise<void> => {
   try {
-    await client.query('BEGIN');
+    console.log('🌱 Starting question seeding process...');
+    
+    const pool = await getDatabase();
+    const client = await pool.connect();
 
-    // Check if questions already exist
-    const questionsResult = await client.query('SELECT COUNT(*) as count FROM questions');
-    const questionsCount = parseInt(questionsResult.rows[0].count) || 0;
+    try {
+      // Check if questions already exist
+      const existingQuestions = await client.query('SELECT COUNT(*) as count FROM questions');
+      const questionCount = parseInt(existingQuestions.rows[0].count);
 
-    if (questionsCount === 0) {
-      console.log('🌱 Seeding assessment questions...');
+      if (questionCount > 0) {
+        console.log(`📊 Found ${questionCount} existing questions. Skipping seeding.`);
+        return;
+      }
 
-      for (const question of assessmentQuestions) {
+      console.log('📝 Inserting questions into database...');
+
+      // Insert questions
+      for (const question of questions) {
         await client.query(`
-          INSERT INTO questions (category_id, text, description, type, weight, options, order_index)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          INSERT INTO questions (
+            category_id, text, description, type, weight, options, order_index, is_active
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `, [
-          question.category_id,
+          question.categoryId,
           question.text,
           question.description,
           question.type,
           question.weight,
           JSON.stringify(question.options),
-          question.order_index
+          question.orderIndex,
+          true
         ]);
       }
 
-      console.log(`✅ Successfully seeded ${assessmentQuestions.length} questions`);
-    } else {
-      console.log('📋 Questions already exist, skipping seed');
+      console.log(`✅ Successfully seeded ${questions.length} questions!`);
+
+      // Verify seeding
+      const finalCount = await client.query('SELECT COUNT(*) as count FROM questions');
+      console.log(`📊 Total questions in database: ${finalCount.rows[0].count}`);
+
+      // Show questions by category
+      const categoryCounts = await client.query(`
+        SELECT 
+          c.name as category_name,
+          COUNT(q.id) as question_count
+        FROM assessment_categories c
+        LEFT JOIN questions q ON c.id = q.category_id
+        GROUP BY c.id, c.name
+        ORDER BY c.order_index
+      `);
+
+      console.log('\n📋 Questions by category:');
+      categoryCounts.rows.forEach(row => {
+        console.log(`  ${row.category_name}: ${row.question_count} questions`);
+      });
+
+    } finally {
+      client.release();
     }
 
-    await client.query('COMMIT');
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('❌ Error seeding questions:', error);
     throw error;
-  } finally {
-    client.release();
   }
-}
+};
 
-// Run if called directly
+// Run the seeding if this file is executed directly
 if (require.main === module) {
   seedQuestions()
     .then(() => {
-      console.log('✅ Question seeding completed');
+      console.log('🎉 Question seeding completed successfully!');
       process.exit(0);
     })
     .catch((error) => {
-      console.error('❌ Question seeding failed:', error);
+      console.error('💥 Question seeding failed:', error);
       process.exit(1);
     });
 }
+
+export { seedQuestions };
+export default seedQuestions;
