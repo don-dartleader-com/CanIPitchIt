@@ -52,11 +52,13 @@ class ApiService {
 
   // Assessment endpoints
   async getQuestions(): Promise<Question[]> {
+    console.log('Making request to:', this.api.defaults.baseURL + '/questions');
     const response: AxiosResponse<ApiResponse<Question[]>> = await this.api.get('/questions');
     return response.data.data || [];
   }
 
   async getCategories(): Promise<AssessmentCategory[]> {
+    console.log('Making request to:', this.api.defaults.baseURL + '/categories');
     const response: AxiosResponse<ApiResponse<AssessmentCategory[]>> = await this.api.get('/categories');
     return response.data.data || [];
   }
