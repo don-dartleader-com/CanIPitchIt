@@ -14,8 +14,11 @@ class ApiService {
   private api: AxiosInstance;
 
   constructor() {
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://dev.canipitchit.com/api';
+    console.log('API URL:', apiUrl); // Debug log
+    
     this.api = axios.create({
-      baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api',
+      baseURL: apiUrl,
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
