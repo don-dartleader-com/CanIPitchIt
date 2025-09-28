@@ -1,8 +1,31 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { User, UserProfile, AuthState } from '../types';
-import { signIn, signUp, signOut, getCurrentUser, fetchUserAttributes, updateUserAttributes, confirmSignUp, resendSignUpCode } from '@aws-amplify/auth';
 import '../config/cognito'; // Initialize Cognito configuration
 import toast from 'react-hot-toast';
+
+// Conditional imports for AWS Amplify Auth
+let signIn: any = null;
+let signUp: any = null;
+let signOut: any = null;
+let getCurrentUser: any = null;
+let fetchUserAttributes: any = null;
+let updateUserAttributes: any = null;
+let confirmSignUp: any = null;
+let resendSignUpCode: any = null;
+
+try {
+  const authModule = require('@aws-amplify/auth');
+  signIn = authModule.signIn;
+  signUp = authModule.signUp;
+  signOut = authModule.signOut;
+  getCurrentUser = authModule.getCurrentUser;
+  fetchUserAttributes = authModule.fetchUserAttributes;
+  updateUserAttributes = authModule.updateUserAttributes;
+  confirmSignUp = authModule.confirmSignUp;
+  resendSignUpCode = authModule.resendSignUpCode;
+} catch (error) {
+  console.warn('⚠️ AWS Amplify Auth not available - using fallback authentication');
+}
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
@@ -60,6 +83,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initializeAuth = async () => {
+      // If AWS dependencies aren't available, just set loading to false
+      if (!getCurrentUser || !fetchUserAttributes) {
+        dispatch({ type: 'SET_LOADING', payload: false });
+        return;
+      }
+
       try {
         const cognitoUser = await getCurrentUser();
         const attributes = await fetchUserAttributes();
@@ -98,6 +127,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
+    if (!signIn || !getCurrentUser || !fetchUserAttributes) {
+      const message = 'Authentication not available. Please install AWS dependencies by running "npm install" on the server.';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      throw new Error(message);
+    }
+
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
@@ -143,6 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (email: string, password: string, profile?: Partial<UserProfile>) => {
+    if (!signUp) {
+      const message = 'Registration not available. Please install AWS dependencies by running "npm install" on the server.';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      throw new Error(message);
+    }
+
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
@@ -188,6 +231,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    if (!signOut) {
+      // If AWS isn't available, just clear local state
+      dispatch({ type: 'LOGOUT' });
+      toast.success('Logged out successfully');
+      return;
+    }
+
     try {
       await signOut();
       dispatch({ type: 'LOGOUT' });
@@ -201,6 +251,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateProfile = async (profileData: Partial<UserProfile>) => {
+    if (!updateUserAttributes) {
+      const message = 'Profile updates not available. Please install AWS dependencies by running "npm install" on the server.';
+      toast.error(message);
+      throw new Error(message);
+    }
+
     try {
       const attributesToUpdate: Record<string, string> = {};
       
