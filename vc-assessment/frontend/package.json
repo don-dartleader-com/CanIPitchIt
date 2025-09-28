@@ -4,6 +4,7 @@
   "private": true,
   "homepage": "/",
   "dependencies": {
+    "@aws-amplify/auth": "^6.0.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^16.3.0",
@@ -14,6 +15,7 @@
     "@types/react-dom": "^19.1.7",
     "@types/react-router-dom": "^5.3.3",
     "autoprefixer": "^10.4.21",
+    "aws-amplify": "^6.0.0",
     "axios": "^1.11.0",
     "lucide-react": "^0.536.0",
     "react": "^19.1.1",

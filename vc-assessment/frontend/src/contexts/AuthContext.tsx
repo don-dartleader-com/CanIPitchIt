@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { User, UserProfile, AuthState } from '../types';
-import apiService from '../services/api';
+import { signIn, signUp, signOut, getCurrentUser, fetchUserAttributes, updateUserAttributes, confirmSignUp, resendSignUpCode } from '@aws-amplify/auth';
+import '../config/cognito'; // Initialize Cognito configuration
 import toast from 'react-hot-toast';
 
 interface AuthContextType extends AuthState {
@@ -59,24 +60,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const token = apiService.getAuthToken();
-      if (token) {
-        try {
-          const user = await apiService.getCurrentUser();
-          let profile: UserProfile | undefined;
-          
-          try {
-            profile = await apiService.getUserProfile();
-          } catch (error) {
-            // Profile might not exist yet, that's okay
-          }
-          
-          dispatch({ type: 'SET_USER', payload: { user, profile } });
-        } catch (error) {
-          apiService.clearAuthToken();
-          dispatch({ type: 'LOGOUT' });
-        }
-      } else {
+      try {
+        const cognitoUser = await getCurrentUser();
+        const attributes = await fetchUserAttributes();
+        
+        // Convert Cognito user to our User type
+        const user: User = {
+          id: parseInt(cognitoUser.userId),
+          email: attributes.email || '',
+          role: attributes['custom:role'] || 'user', // Default to user role
+          is_verified: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        // Convert attributes to UserProfile
+        const profile: UserProfile = {
+          id: parseInt(cognitoUser.userId),
+          user_id: parseInt(cognitoUser.userId),
+          company_name: attributes['custom:CompanyName'] || '',
+          founder_name: `${attributes.given_name || ''} ${attributes.family_name || ''}`.trim(),
+          industry: attributes['custom:Industry'] || '',
+          stage: attributes['custom:Stage'] || '',
+          website: '',
+          linkedin_url: '',
+          description: '',
+        };
+
+        dispatch({ type: 'SET_USER', payload: { user, profile } });
+      } catch (error) {
+        // User not authenticated
         dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
@@ -89,20 +102,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
       
-      const { user, token } = await apiService.login(email, password);
-      apiService.setAuthToken(token);
+      const { isSignedIn } = await signIn({ username: email, password });
       
-      let profile: UserProfile | undefined;
-      try {
-        profile = await apiService.getUserProfile();
-      } catch (error) {
-        // Profile might not exist yet
+      if (isSignedIn) {
+        const cognitoUser = await getCurrentUser();
+        const attributes = await fetchUserAttributes();
+        
+        // Convert Cognito user to our User type
+        const user: User = {
+          id: parseInt(cognitoUser.userId),
+          email: attributes.email || '',
+          role: attributes['custom:role'] || 'user',
+          is_verified: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        // Convert attributes to UserProfile
+        const profile: UserProfile = {
+          id: parseInt(cognitoUser.userId),
+          user_id: parseInt(cognitoUser.userId),
+          company_name: attributes['custom:CompanyName'] || '',
+          founder_name: `${attributes.given_name || ''} ${attributes.family_name || ''}`.trim(),
+          industry: attributes['custom:Industry'] || '',
+          stage: attributes['custom:Stage'] || '',
+          website: '',
+          linkedin_url: '',
+          description: '',
+        };
+        
+        dispatch({ type: 'SET_USER', payload: { user, profile } });
+        toast.success('Successfully logged in!');
       }
-      
-      dispatch({ type: 'SET_USER', payload: { user, profile } });
-      toast.success('Successfully logged in!');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Login failed';
+      const message = error.message || 'Login failed';
       dispatch({ type: 'SET_ERROR', payload: message });
       toast.error(message);
       throw error;
@@ -114,47 +147,97 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
       
-      const { user, token } = await apiService.register(email, password, profile);
-      apiService.setAuthToken(token);
-      
-      let userProfile: UserProfile | undefined;
-      if (profile) {
-        try {
-          userProfile = await apiService.getUserProfile();
-        } catch (error) {
-          // Profile creation might have failed, but user was created
-        }
+      const userAttributes: Record<string, string> = {
+        email,
+        given_name: profile?.founder_name?.split(' ')[0] || '',
+        family_name: profile?.founder_name?.split(' ').slice(1).join(' ') || '',
+      };
+
+      if (profile?.company_name) {
+        userAttributes['custom:CompanyName'] = profile.company_name;
       }
-      
-      dispatch({ type: 'SET_USER', payload: { user, profile: userProfile } });
-      toast.success('Account created successfully!');
+      if (profile?.industry) {
+        userAttributes['custom:Industry'] = profile.industry;
+      }
+      if (profile?.stage) {
+        userAttributes['custom:Stage'] = profile.stage;
+      }
+
+      const { isSignUpComplete, nextStep } = await signUp({
+        username: email,
+        password,
+        options: {
+          userAttributes,
+        },
+      });
+
+      if (isSignUpComplete) {
+        // Auto-login after successful registration
+        await login(email, password);
+      } else {
+        // Handle email verification if required
+        toast.success('Registration successful! Please check your email for verification.');
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Registration failed';
+      const message = error.message || 'Registration failed';
       dispatch({ type: 'SET_ERROR', payload: message });
       toast.error(message);
       throw error;
     }
   };
 
-  const logout = () => {
-    apiService.logout();
-    dispatch({ type: 'LOGOUT' });
-    toast.success('Logged out successfully');
+  const logout = async () => {
+    try {
+      await signOut();
+      dispatch({ type: 'LOGOUT' });
+      toast.success('Logged out successfully');
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      // Force logout even if Cognito call fails
+      dispatch({ type: 'LOGOUT' });
+      toast.success('Logged out successfully');
+    }
   };
 
   const updateProfile = async (profileData: Partial<UserProfile>) => {
     try {
-      const updatedProfile = await apiService.updateUserProfile(profileData);
+      const attributesToUpdate: Record<string, string> = {};
+      
+      if (profileData.founder_name) {
+        const nameParts = profileData.founder_name.split(' ');
+        attributesToUpdate.given_name = nameParts[0] || '';
+        attributesToUpdate.family_name = nameParts.slice(1).join(' ') || '';
+      }
+      
+      if (profileData.company_name) {
+        attributesToUpdate['custom:CompanyName'] = profileData.company_name;
+      }
+      
+      if (profileData.industry) {
+        attributesToUpdate['custom:Industry'] = profileData.industry;
+      }
+      
+      if (profileData.stage) {
+        attributesToUpdate['custom:Stage'] = profileData.stage;
+      }
+
+      await updateUserAttributes({
+        userAttributes: attributesToUpdate,
+      });
+
+      // Update local state
+      const updatedProfile = { ...state.profile, ...profileData };
       dispatch({ 
         type: 'SET_USER', 
         payload: { 
           user: state.user!, 
-          profile: updatedProfile 
+          profile: updatedProfile as UserProfile
         } 
       });
       toast.success('Profile updated successfully!');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Profile update failed';
+      const message = error.message || 'Profile update failed';
       toast.error(message);
       throw error;
     }
